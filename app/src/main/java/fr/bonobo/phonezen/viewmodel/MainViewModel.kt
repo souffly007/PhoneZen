@@ -118,13 +118,25 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      */
     private fun checkReportedNumbers(numbers: List<String>) {
         viewModelScope.launch(Dispatchers.IO) {
-            val map = mutableMapOf<String, ReportedNumber>()
+            val map            = mutableMapOf<String, ReportedNumber>()
+            val communityBlock = mutableSetOf<String>()
+
             numbers.forEach { number ->
                 val reported = reportRepo.checkNumber(number)
                 if (reported != null && reported.isSuspect()) {
-                    map[PhoneUtils.normalizeNumber(number)] = reported
+                    val normalized = PhoneUtils.normalizeNumber(number)
+                    map[normalized] = reported
+
+                    // Si au-dessus du seuil de blocage automatique → cache local
+                    if (reported.reports >= SpamDetector.COMMUNITY_BLOCK_THRESHOLD) {
+                        communityBlock.add(normalized)
+                    }
                 }
             }
+
+            // Sync le cache communautaire dans SpamDetector (utilisé par le service)
+            spamDetector.setCommunityBlockedNumbers(communityBlock)
+
             withContext(Dispatchers.Main) {
                 _reportedNumbers.value = map
             }
@@ -295,4 +307,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _contacts.value.associate {
             PhoneUtils.normalizeNumber(it.phoneNumber) to it.name
         }
+
+    // Exposé pour TopReportedScreen
+    suspend fun getTopReported() = reportRepo.getTopReported()
 }

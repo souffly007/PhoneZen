@@ -18,6 +18,9 @@ class SpamDetector(context: Context) {
         private val neverBlock            = mutableListOf<String>()
         private var isLoaded = false
 
+        /** Seuil de signalements communautaires pour blocage automatique */
+        const val COMMUNITY_BLOCK_THRESHOLD = 10L
+
         private fun loadJson(context: Context) {
             if (isLoaded) return
             try {
@@ -105,6 +108,53 @@ class SpamDetector(context: Context) {
     }
 
     // ─────────────────────────────────────────────
+    // BLOCAGE COMMUNAUTAIRE
+    // ─────────────────────────────────────────────
+
+    /**
+     * Vérifie si le blocage automatique communautaire est activé.
+     */
+    fun isCommunityBlockEnabled(): Boolean =
+        prefs.getBoolean("community_block_enabled", true)
+
+    fun setCommunityBlockEnabled(enabled: Boolean) =
+        prefs.edit().putBoolean("community_block_enabled", enabled).apply()
+
+    /**
+     * Cache local des numéros bloqués par la communauté.
+     * Mis à jour par MainViewModel.checkReportedNumbers() au chargement.
+     * Utilisé par le CallScreeningService pour éviter un appel Firestore
+     * à chaque appel entrant.
+     */
+    fun getCommunityBlockedNumbers(): Set<String> =
+        prefs.getStringSet("community_blocked", emptySet()) ?: emptySet()
+
+    fun setCommunityBlockedNumbers(numbers: Set<String>) =
+        prefs.edit().putStringSet("community_blocked", numbers).apply()
+
+    fun addCommunityBlocked(number: String) {
+        val set = getCommunityBlockedNumbers().toMutableSet()
+        set.add(normalize(number))
+        prefs.edit().putStringSet("community_blocked", set).apply()
+    }
+
+    fun removeCommunityBlocked(number: String) {
+        val set = getCommunityBlockedNumbers().toMutableSet()
+        set.remove(normalize(number))
+        prefs.edit().putStringSet("community_blocked", set).apply()
+    }
+
+    /**
+     * Vérifie si un numéro est dans le cache communautaire local.
+     */
+    fun isCommunityBlocked(number: String): Boolean {
+        if (!isCommunityBlockEnabled()) return false
+        val clean = normalize(toLocalFormat(number.replace(Regex("[^0-9+]"), "")))
+        val intl  = normalize(toInternationalFormat(number.replace(Regex("[^0-9+]"), "")))
+        return getCommunityBlockedNumbers().any { it == clean || it == intl }
+    }
+
+    // ─────────────────────────────────────────────
     // LISTE BLANCHE
     // ─────────────────────────────────────────────
     fun getWhitelist(): Set<String> =
@@ -145,7 +195,6 @@ class SpamDetector(context: Context) {
     fun setScheduleEndMinute(m: Int)   = prefs.edit().putInt("schedule_end_minute", m).apply()
     fun getScheduleEndMinute(): Int    = prefs.getInt("schedule_end_minute", 0)
 
-    /** true si l'heure actuelle est dans la plage (gère le croisement minuit) */
     fun isInBlockingSchedule(): Boolean {
         if (!isScheduleEnabled()) return false
         val now    = Calendar.getInstance()

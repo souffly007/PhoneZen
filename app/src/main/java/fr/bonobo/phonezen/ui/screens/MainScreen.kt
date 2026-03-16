@@ -20,28 +20,32 @@ enum class Screen(val title: String, val icon: ImageVector) {
 
 @Composable
 fun MainScreen(
-    vm: MainViewModel,
-    themeVm: ThemeViewModel,
-    onCall: (String) -> Unit,
+    vm         : MainViewModel,
+    themeVm    : ThemeViewModel,
+    onCall     : (String) -> Unit,
     onVoicemail: () -> Unit
 ) {
     val c             = LocalColors.current
     var currentScreen by remember { mutableStateOf(Screen.Keypad) }
-    var showWhitelist by remember { mutableStateOf(false) }
-    var showTheme     by remember { mutableStateOf(false) }
+    var showWhitelist    by remember { mutableStateOf(false) }
+    var showTheme        by remember { mutableStateOf(false) }
+    var showTopReported  by remember { mutableStateOf(false) }
 
+    // ── Écrans plein écran sans BottomBar ──
     if (showWhitelist) {
         WhitelistScreen(vm = vm, onBack = { showWhitelist = false })
         return
     }
-
     if (showTheme) {
         ThemeSelectorScreen(themeVm = themeVm, onBack = { showTheme = false })
         return
     }
+    if (showTopReported) {
+        TopReportedScreen(vm = vm, onBack = { showTopReported = false })
+        return
+    }
 
     Scaffold(
-        // ── Fond du Scaffold calé sur le thème actif ──
         containerColor = c.background,
         bottomBar = {
             NavigationBar(
@@ -66,11 +70,11 @@ fun MainScreen(
                             )
                         },
                         colors = NavigationBarItemDefaults.colors(
-                            indicatorColor           = c.surfaceVar,
-                            selectedIconColor        = c.neonOrange,
-                            unselectedIconColor      = c.textSecond,
-                            selectedTextColor        = c.neonOrange,
-                            unselectedTextColor      = c.textSecond
+                            indicatorColor          = c.surfaceVar,
+                            selectedIconColor       = c.neonOrange,
+                            unselectedIconColor     = c.textSecond,
+                            selectedTextColor       = c.neonOrange,
+                            unselectedTextColor     = c.textSecond
                         )
                     )
                 }
@@ -83,10 +87,11 @@ fun MainScreen(
                 Screen.Keypad    -> KeypadScreen(onCall = onCall, onVoicemail = onVoicemail)
                 Screen.Contacts  -> ContactsScreen(vm = vm, onCall = onCall)
                 Screen.Settings  -> SettingsScreen(
-                    vm                    = vm,
-                    themeVm               = themeVm,
-                    onNavigateToWhitelist = { showWhitelist = true },
-                    onNavigateToTheme     = { showTheme = true }
+                    vm                     = vm,
+                    themeVm                = themeVm,
+                    onNavigateToWhitelist  = { showWhitelist = true },
+                    onNavigateToTheme      = { showTheme = true },
+                    onNavigateToTopReported = { showTopReported = true }
                 )
             }
         }

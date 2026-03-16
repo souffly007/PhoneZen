@@ -27,8 +27,9 @@ import fr.bonobo.phonezen.viewmodel.ThemeViewModel
 fun SettingsScreen(
     vm: MainViewModel,
     themeVm: ThemeViewModel,
-    onNavigateToWhitelist: () -> Unit = {},
-    onNavigateToTheme: () -> Unit = {}
+    onNavigateToWhitelist  : () -> Unit = {},
+    onNavigateToTheme      : () -> Unit = {},
+    onNavigateToTopReported: () -> Unit = {}
 ) {
     val c                = LocalColors.current
     val ctx              = LocalContext.current
@@ -74,6 +75,19 @@ fun SettingsScreen(
             title    = "Filtres anti-spam actifs",
             subtitle = "prefixes_blocked_fr.json v4.1 (2026-02-25)",
             onClick  = {}
+        )
+        SettingItem(
+            icon     = Icons.Default.WarningAmber,
+            title    = "Top numéros signalés",
+            subtitle = "Numéros les plus signalés par la communauté",
+            onClick  = onNavigateToTopReported
+        )
+        SettingSwitch(
+            icon     = Icons.Default.Groups,
+            title    = "Blocage communautaire auto",
+            subtitle = "Bloque automatiquement les numéros signalés 10× ou plus",
+            checked  = vm.spamDetector.isCommunityBlockEnabled(),
+            onToggle = { vm.spamDetector.setCommunityBlockEnabled(it) }
         )
 
         SectionHeader("🌙 Mode Ne pas déranger")
@@ -184,9 +198,13 @@ fun SettingsScreen(
 
         SettingItem(
             icon     = Icons.Default.Info,
-            title    = "PhoneZen v1.0.0",
+            title    = "PhoneZen v1.2",
             subtitle = "Développé par Franck R-F (souffly007) · GPL v3",
-            onClick  = {}
+            onClick  = {
+                ctx.startActivity(
+                    Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/souffly007/PhoneZen"))
+                )
+            }
         )
 
         Spacer(Modifier.height(32.dp))

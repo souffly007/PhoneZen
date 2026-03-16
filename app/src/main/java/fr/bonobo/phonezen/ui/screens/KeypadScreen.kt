@@ -37,47 +37,46 @@ val DIAL_KEYS = listOf(
 // ── Numéros de messagerie par opérateur ──
 // Format : numéro composable (sans espaces) → affiché proprement dans le bouton
 private val VOICEMAIL_NUMBERS = mapOf(
-    // Opérateurs nationaux
+    // --- OPÉRATEURS NATIONAUX ---
     "orange"                   to "+33608080808",
     "sosh"                     to "+33608080808",
     "sfr"                      to "+33612000123",
-    "red by sfr"               to "+33612000123",
     "red"                      to "+33612000123",
-    "bouygues telecom"         to "+33660660001",
+    "red by sfr"               to "+33612000123",
     "bouygues"                 to "+33660660001",
+    "bouygues telecom"         to "+33660660001",
     "b&you"                    to "+33660660001",
-    "bandyou"                  to "+33660660001",
-    "byou"                     to "+33660660001",
-    "free mobile"              to "+33695600012",
+    "free mobile"              to "+33695600012", // Corrigé : Accès direct répondeur
+    "free"                     to "+33695600012",
+
+    // --- MVNO RÉSEAU SFR ---
     "la poste mobile"          to "+33612000123",
     "la poste"                 to "+33612000123",
-
-// MVNO réseau SFR
     "prixtel"                  to "+33612000123",
-    "auchan telecom"           to "+33771191777",
-    "auchan"                   to "+33771191777",
-    "lebara"                   to "+33612000123",
-    "lycamobile"               to "+33612000123",
     "coriolis"                 to "+33612000123",
-    "cic mobile"               to "+33771181777",
-    "crédit mutuel mobile"     to "+33771181777",
-
-// MVNO réseau Bouygues
-    "nrj mobile"               to "+33771191777",
-    "nrj"                      to "+33771191777",
-    "syma mobile"              to "+33608080808",
-    "syma"                     to "+33608080808",
     "réglo mobile"             to "+33612000123",
     "réglo"                    to "+33612000123",
-    "afone mobile"             to "+33608080808",
-    "afone"                    to "+33608080808",
+
+    // --- MVNO RÉSEAU BOUYGUES (ex-EI Telecom) ---
+    // Ces numéros utilisent désormais la passerelle technique de Bouygues
+    "nrj mobile"               to "+33771212777",
+    "nrj"                      to "+33771212777",
+    "cic mobile"               to "+33771212777",
+    "crédit mutuel mobile"     to "+33771212777",
+    "auchan telecom"           to "+33771212777",
+    "auchan"                   to "+33771212777",
+
+    // --- MVNO RÉSEAU ORANGE / AUTRES ---
+    "syma mobile"              to "+33608080808",
+    "syma"                     to "+33608080808",
     "youprice"                 to "+33608080808",
+    "lebara"                   to "+33680802345", // Passerelle spécifique Lebara
+    "lycamobile"               to "+33751000121", // Passerelle spécifique Lyca
 
-// MVNO "La Poste Mobile"
-    "la banque postale SFR" to "+33612000123",
-    "la banque postale BGT"    to "+33660660001",
-    )
-
+    // --- CAS PARTICULIERS ---
+    "la banque postale sfr"    to "+33612000123",
+    "la banque postale bgt"    to "+33660660001"
+)
 private const val VOICEMAIL_FALLBACK = "123"
 
 fun detectVoicemailNumber(context: android.content.Context): String {
