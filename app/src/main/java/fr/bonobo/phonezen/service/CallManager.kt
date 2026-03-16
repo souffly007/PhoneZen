@@ -1,15 +1,24 @@
 package fr.bonobo.phonezen.service
 
+import android.media.AudioManager
+import android.media.ToneGenerator
+import android.os.Handler
+import android.os.Looper
 import android.telecom.Call
 import android.telecom.CallAudioState
 import android.telecom.InCallService
 import android.telecom.VideoProfile
+import android.util.Log
 import fr.bonobo.phonezen.data.model.CallStatus
 
 object CallManager {
 
     private var currentCall: Call? = null
     private var inCallService: InCallService? = null
+    private val handler = Handler(Looper.getMainLooper())
+
+    // Générateur de sons pour le retour audio local
+    private val toneGenerator = ToneGenerator(AudioManager.STREAM_DTMF, 80)
 
     private val listeners = mutableListOf<(Call?, CallStatus) -> Unit>()
     private val audioListeners = mutableListOf<(Boolean, Boolean, Int) -> Unit>()
@@ -101,8 +110,37 @@ object CallManager {
         inCallService?.setAudioRoute(newRoute)
     }
 
-    fun playDtmf(c: Char) = currentCall?.playDtmfTone(c)
-    fun stopDtmf() = currentCall?.stopDtmfTone()
+    // --- GESTION DU CLAVIER (DTMF) ---
+    fun playDtmf(c: Char) {
+        // Son local (Bip dans le haut-parleur)
+        val toneType = when (c) {
+            '1' -> ToneGenerator.TONE_DTMF_1
+            '2' -> ToneGenerator.TONE_DTMF_2
+            '3' -> ToneGenerator.TONE_DTMF_3
+            '4' -> ToneGenerator.TONE_DTMF_4
+            '5' -> ToneGenerator.TONE_DTMF_5
+            '6' -> ToneGenerator.TONE_DTMF_6
+            '7' -> ToneGenerator.TONE_DTMF_7
+            '8' -> ToneGenerator.TONE_DTMF_8
+            '9' -> ToneGenerator.TONE_DTMF_9
+            '0' -> ToneGenerator.TONE_DTMF_0
+            '*' -> ToneGenerator.TONE_DTMF_S
+            '#' -> ToneGenerator.TONE_DTMF_P
+            else -> return
+        }
+        toneGenerator.startTone(toneType, 150)
+
+        // Signal réseau (pour le répondeur)
+        currentCall?.let { call ->
+            call.playDtmfTone(c)
+            handler.postDelayed({ call.stopDtmfTone() }, 200)
+        }
+    }
+
+    // Ajouté pour InCallViewModel
+    fun stopDtmf() {
+        currentCall?.stopDtmfTone()
+    }
 
     private fun notify(call: Call?, status: CallStatus) {
         listeners.forEach { it(call, status) }
@@ -112,13 +150,12 @@ object CallManager {
         audioListeners.forEach { it(isMuted, isOnHold, audioRoute) }
     }
 
-    // RECTIFICATION : On aligne les états avec CallStatus.kt
     fun fromState(state: Int): CallStatus = when (state) {
-        Call.STATE_RINGING -> CallStatus.RINGING      // Changé INCOMING -> RINGING
+        Call.STATE_RINGING -> CallStatus.RINGING
         Call.STATE_DIALING,
         Call.STATE_CONNECTING -> CallStatus.DIALING
         Call.STATE_ACTIVE -> CallStatus.ACTIVE
-        Call.STATE_HOLDING -> CallStatus.ON_HOLD     // Changé HOLDING -> ON_HOLD
+        Call.STATE_HOLDING -> CallStatus.ON_HOLD
         Call.STATE_DISCONNECTED -> CallStatus.DISCONNECTED
         else -> CallStatus.IDLE
     }
