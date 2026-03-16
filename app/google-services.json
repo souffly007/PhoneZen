@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "516370377292",
+    "project_id": "phonezen-5ad0c",
+    "storage_bucket": "phonezen-5ad0c.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:516370377292:android:e20ad6f38128a62902e2e9",
+        "android_client_info": {
+          "package_name": "fr.bonobo.phonezen"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDBYDyGhXMRsFrd0OgQ-EES5JL-d2dH8kE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,0 +1,137 @@
+package fr.bonobo.phonezen
+
+import android.Manifest
+import android.app.role.RoleManager
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Build
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.viewModels
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.core.content.ContextCompat
+import fr.bonobo.phonezen.ui.screens.MainScreen
+import fr.bonobo.phonezen.ui.theme.PhoneZenTheme
+import fr.bonobo.phonezen.viewmodel.MainViewModel
+import fr.bonobo.phonezen.viewmodel.ThemeViewModel
+
+class MainActivity : ComponentActivity() {
+
+    private val vm: MainViewModel by viewModels()
+    private val themeVm: ThemeViewModel by viewModels()
+    private var rolesRequested = false
+
+    private val requiredPermissions = mutableListOf(
+        Manifest.permission.READ_CALL_LOG,
+        Manifest.permission.WRITE_CALL_LOG,
+        Manifest.permission.READ_CONTACTS,
+        Manifest.permission.CALL_PHONE,
+        Manifest.permission.READ_PHONE_STATE,
+        Manifest.permission.ANSWER_PHONE_CALLS
+    ).apply {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            add(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }.toTypedArray()
+
+    private val permLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { results ->
+            if (results.all { it.value }) {
+                proceedAfterPermissions()
+            }
+        }
+
+    private val roleLauncher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+            // Ne PAS remettre rolesRequested à false ici
+            // pour éviter la boucle infinie sur les rôles refusés
+        }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+
+        setContent {
+            val appTheme by themeVm.theme.collectAsState()
+            PhoneZenTheme(appTheme = appTheme) {
+                MainScreen(
+                    vm          = vm,
+                    themeVm     = themeVm,
+                    onCall      = { number -> launchCall(number) },
+                    onVoicemail = { launchCall("123") }
+                )
+            }
+        }
+
+        checkPermissions()
+    }
+
+    private fun checkPermissions() {
+        val missing = requiredPermissions.filter {
+            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
+        }
+        if (missing.isEmpty()) {
+            proceedAfterPermissions()
+        } else {
+            permLauncher.launch(missing.toTypedArray())
+        }
+    }
+
+    private fun proceedAfterPermissions() {
+        vm.loadData(this)
+        checkAndRequestRoles()
+    }
+
+    private fun checkAndRequestRoles() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return
+        if (rolesRequested) return
+
+        val roleManager = getSystemService(Context.ROLE_SERVICE) as RoleManager
+
+        if (!roleManager.isRoleHeld(RoleManager.ROLE_DIALER)) {
+            rolesRequested = true
+            roleLauncher.launch(roleManager.createRequestRoleIntent(RoleManager.ROLE_DIALER))
+            return
+        }
+
+        if (!roleManager.isRoleHeld(RoleManager.ROLE_CALL_SCREENING)) {
+            rolesRequested = true
+            roleLauncher.launch(roleManager.createRequestRoleIntent(RoleManager.ROLE_CALL_SCREENING))
+            return
+        }
+    }
+
+    private fun launchCall(number: String) {
+        try {
+            val intent = Intent(Intent.ACTION_CALL).apply {
+                data = Uri.fromParts("tel", number, null)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            startActivity(intent)
+        } catch (e: SecurityException) {
+            val intent = Intent(Intent.ACTION_DIAL).apply {
+                data = Uri.fromParts("tel", number, null)
+            }
+            startActivity(intent)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (rolesReady()) {
+            vm.loadData(this)
+        }
+    }
+
+    private fun rolesReady(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return true
+        val roleManager = getSystemService(Context.ROLE_SERVICE) as RoleManager
+        return roleManager.isRoleHeld(RoleManager.ROLE_DIALER)
+    }
+}

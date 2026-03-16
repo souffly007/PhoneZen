@@ -1,0 +1,2 @@
+-keep class fr.bonobo.phonezen.** { *; }
+-keepattributes *Annotation*
