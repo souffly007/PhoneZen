@@ -3,16 +3,6 @@ package fr.bonobo.phonezen.data.model
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
-// ── Contact (depuis ContentResolver, pas Room) ──
-data class Contact(
-    val contactId: Long,
-    val name: String,
-    val phoneNumber: String,
-    val phoneType: Int,
-    val photoUri: String? = null,
-    val isFavorite: Boolean = false
-)
-
 // ── Entrée journal ──
 data class CallEntry(
     val id: Long,

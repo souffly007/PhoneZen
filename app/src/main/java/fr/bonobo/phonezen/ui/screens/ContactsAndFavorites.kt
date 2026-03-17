@@ -103,9 +103,10 @@ private fun SectionLabel(text: String) {
 
 @Composable
 fun FavoritesScreen(vm: MainViewModel, onCall: (String) -> Unit) {
-    val c         = LocalColors.current
-    val contacts  by vm.contacts.collectAsState()
-    val favorites  = contacts.filter { it.isFavorite }.sortedBy { it.name }
+    val c = LocalColors.current
+
+    // 1. On observe directement la liste 'favorites' du ViewModel (qui est déjà filtrée et triée par callCount)
+    val favorites by vm.favorites.collectAsState()
 
     Column(modifier = Modifier.fillMaxSize().background(c.background)) {
         Text(
@@ -115,10 +116,16 @@ fun FavoritesScreen(vm: MainViewModel, onCall: (String) -> Unit) {
             color      = c.neonOrange,
             modifier   = Modifier.padding(16.dp)
         )
+
         if (favorites.isEmpty()) {
-            EmptyState(icon = Icons.Default.StarBorder, message = "Aucun favori", subtitle = "Appuyez sur ⭐ dans la liste")
+            EmptyState(
+                icon = Icons.Default.StarBorder,
+                message = "Aucun favori",
+                subtitle = "Appuyez sur ⭐ dans la liste"
+            )
         } else {
             LazyColumn(Modifier.fillMaxSize()) {
+                // 2. On affiche la liste telle quelle
                 items(favorites, key = { it.contactId }) { contact ->
                     ContactRow(contact = contact, onCall = onCall, vm = vm)
                     HorizontalDivider(color = c.glassStroke, thickness = 0.5.dp)

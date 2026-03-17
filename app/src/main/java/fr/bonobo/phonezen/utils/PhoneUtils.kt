@@ -79,13 +79,21 @@ object PhoneUtils {
                 val photo = if (photoIdx >= 0) c.getString(photoIdx) else null
                 val key   = groupKey(num)
                 if (!map.containsKey(id) || type == ContactsContract.CommonDataKinds.Phone.TYPE_MOBILE) {
+                    // On convertit le code 'type' (Int) en libellé (String) comme "Mobile" ou "Maison"
+                    val label = ContactsContract.CommonDataKinds.Phone.getTypeLabel(
+                        context.resources,
+                        type,
+                        ""
+                    ).toString()
+
                     map[id] = Contact(
                         contactId   = id,
                         name        = name,
                         phoneNumber = num,
-                        phoneType   = type,
                         photoUri    = photo,
-                        isFavorite  = favoriteIds.contains(key)
+                        isFavorite  = favoriteIds.contains(key),
+                        phoneType   = label, // On passe le String ici
+                        callCount   = 0      // On initialise le compteur à 0
                     )
                 }
             }

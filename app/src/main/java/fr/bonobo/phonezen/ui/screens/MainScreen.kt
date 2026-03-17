@@ -84,7 +84,7 @@ fun MainScreen(
         Box(modifier = Modifier.padding(innerPadding)) {
             when (currentScreen) {
                 Screen.Recents   -> RecentsScreen(vm = vm, onCall = onCall)
-                Screen.Keypad    -> KeypadScreen(onCall = onCall, onVoicemail = onVoicemail)
+                Screen.Keypad    -> KeypadScreen(vm = vm, onCall = onCall, onVoicemail = onVoicemail)
                 Screen.Contacts  -> ContactsScreen(vm = vm, onCall = onCall)
                 Screen.Settings  -> SettingsScreen(
                     vm                     = vm,

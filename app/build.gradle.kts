@@ -1,21 +1,24 @@
 plugins {
     id("com.android.application")
-    id("org.jetbrains.kotlin.android")
-    id("com.google.devtools.ksp")
+    id("org.jetbrains.kotlin.android") version "2.1.10" // Assure-toi que la version est là
+    id("com.google.devtools.ksp") version "2.1.10-1.0.29" // Version alignée sur Kotlin
     id("com.google.gms.google-services")
     id("com.google.firebase.crashlytics")
+    id("org.jetbrains.kotlin.plugin.compose") version "2.1.10" // Nouveau plugin obligatoire
 }
 
 android {
     namespace  = "fr.bonobo.phonezen"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "fr.bonobo.phonezen"
         minSdk        = 26
-        targetSdk     = 34
+        targetSdk     = 35 // Passe-le à 35 aussi pour être cohérent avec le compileSdk
         versionCode   = 1
         versionName   = "1.2"
+
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
@@ -29,10 +32,15 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions { jvmTarget = "17" }
 
-    buildFeatures { compose = true }
-    composeOptions { kotlinCompilerExtensionVersion = "1.5.8" }
+    // Version recommandée pour Kotlin 2.x
+    kotlin {
+        jvmToolchain(17)
+    }
+
+    buildFeatures {
+        compose = true
+    }
 }
 
 dependencies {
@@ -41,7 +49,7 @@ dependencies {
     implementation("com.google.firebase:firebase-firestore-ktx")
     implementation("com.google.firebase:firebase-crashlytics")
 
-    val composeBom = platform("androidx.compose:compose-bom:2024.02.00")
+    val composeBom = platform("androidx.compose:compose-bom:2025.03.00")
     implementation(composeBom)
 
     // Core
@@ -70,6 +78,10 @@ dependencies {
 
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+
+    implementation("androidx.compose.foundation:foundation:1.10.5")
+    implementation("androidx.compose.material3:material3:1.4.0")
+    implementation("androidx.graphics:graphics-path:1.1.0-rc01")
 
     // JSON
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.2")
