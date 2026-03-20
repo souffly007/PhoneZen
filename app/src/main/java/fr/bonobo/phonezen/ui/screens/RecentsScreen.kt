@@ -88,7 +88,7 @@ fun RecentsScreen(vm: MainViewModel, onCall: (String) -> Unit) {
         .filter { group ->
             when (activeFilter) {
                 CallFilter.ALL      -> true
-                CallFilter.MISSED   -> group.missedCount > 0
+                CallFilter.MISSED   -> group.calls.any { it.type == android.provider.CallLog.Calls.MISSED_TYPE && it.duration == 0L }
                 CallFilter.INCOMING -> group.lastCall.type == CallLog.Calls.INCOMING_TYPE
                 CallFilter.OUTGOING -> group.lastCall.type == CallLog.Calls.OUTGOING_TYPE
                 CallFilter.BLOCKED  -> group.lastCall.type == CallLog.Calls.BLOCKED_TYPE ||
@@ -302,20 +302,59 @@ fun RecentsScreen(vm: MainViewModel, onCall: (String) -> Unit) {
                                 }
                             }
                         } else {
-                            // ── Mode normal : swipe pour supprimer ──
+                            // ── Mode normal : swipe pour supprimer avec confirmation ──
+                            var showDeleteConfirm by remember { mutableStateOf(false) }
+                            var pendingDelete     by remember { mutableStateOf("") }
+
                             val dismissState = rememberSwipeToDismissBoxState(
                                 confirmValueChange = { value ->
-                                    if (value != SwipeToDismissBoxValue.Settled) { vm.removeCallGroup(group.number); true } else false
-                                }
+                                    if (value != SwipeToDismissBoxValue.Settled) {
+                                        // Seuil élevé : on demande confirmation plutôt que supprimer direct
+                                        pendingDelete    = group.number
+                                        showDeleteConfirm = true
+                                        false  // ← on ne supprime PAS encore, on revient à la position initiale
+                                    } else false
+                                },
+                                positionalThreshold = { totalDistance -> totalDistance * 0.5f }  // ← 50% de l'écran minimum
                             )
+
+                            if (showDeleteConfirm) {
+                                AlertDialog(
+                                    onDismissRequest = { showDeleteConfirm = false },
+                                    containerColor   = c.surfaceVar,
+                                    title = {
+                                        Text("Supprimer du journal ?", color = c.textPrimary, fontWeight = FontWeight.Bold)
+                                    },
+                                    text = {
+                                        val label = group.name ?: group.number
+                                        Text("L'entrée \"$label\" sera supprimée définitivement du journal.", color = c.textSecond)
+                                    },
+                                    confirmButton = {
+                                        TextButton(onClick = {
+                                            vm.removeCallGroup(pendingDelete)
+                                            showDeleteConfirm = false
+                                        }) {
+                                            Text("Supprimer", color = c.neonRed, fontWeight = FontWeight.Bold)
+                                        }
+                                    },
+                                    dismissButton = {
+                                        TextButton(onClick = { showDeleteConfirm = false }) {
+                                            Text("Annuler", color = c.neonCyan)
+                                        }
+                                    }
+                                )
+                            }
+
                             SwipeToDismissBox(
                                 state             = dismissState,
                                 backgroundContent = {
+                                    val progress = dismissState.progress
+                                    val triggered = progress > 0.5f
                                     val color by animateColorAsState(
-                                        targetValue = when (dismissState.dismissDirection) {
-                                            SwipeToDismissBoxValue.StartToEnd,
-                                            SwipeToDismissBoxValue.EndToStart -> c.neonRed.copy(alpha = 0.85f)
-                                            else -> c.background
+                                        targetValue = when {
+                                            dismissState.dismissDirection == SwipeToDismissBoxValue.Settled -> c.background
+                                            triggered -> c.neonRed.copy(alpha = 0.9f)
+                                            else      -> c.neonRed.copy(alpha = 0.3f + progress * 0.6f)
                                         },
                                         label = "swipe_bg"
                                     )
@@ -327,7 +366,12 @@ fun RecentsScreen(vm: MainViewModel, onCall: (String) -> Unit) {
                                         modifier         = Modifier.fillMaxSize().background(color).padding(horizontal = 24.dp),
                                         contentAlignment = alignment
                                     ) {
-                                        Icon(Icons.Default.Delete, "Supprimer", tint = Color.White, modifier = Modifier.size(28.dp))
+                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                            Icon(Icons.Default.Delete, "Supprimer", tint = Color.White, modifier = Modifier.size(28.dp))
+                                            if (triggered) {
+                                                Text("Relâcher pour confirmer", fontSize = 10.sp, color = Color.White)
+                                            }
+                                        }
                                     }
                                 }
                             ) {
@@ -432,16 +476,22 @@ fun CallGroupRow(
             Spacer(Modifier.width(12.dp))
 
             Column(Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
                     Text(
                         text       = group.name ?: group.number,
                         fontSize   = 16.sp,
                         fontWeight = FontWeight.Medium,
-                        color      = if (group.missedCount > 0) c.neonRed else c.textPrimary
+                        color      = if (group.lastCall.type == CallLog.Calls.MISSED_TYPE) c.neonRed else c.textPrimary,
+                        maxLines   = 1,
+                        overflow   = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        modifier   = Modifier.weight(1f, fill = false)
                     )
                     if (group.callCount > 1) {
-                        Spacer(Modifier.width(6.dp))
-                        Text("(${group.callCount})", fontSize = 13.sp, color = c.neonCyan)
+                        Spacer(Modifier.width(4.dp))
+                        Text("(${group.callCount})", fontSize = 12.sp, color = c.neonCyan, maxLines = 1)
                     }
                     if (group.isFavorite) {
                         Spacer(Modifier.width(4.dp))
