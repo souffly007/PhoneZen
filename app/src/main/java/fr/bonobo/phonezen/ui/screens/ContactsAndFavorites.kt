@@ -31,11 +31,20 @@ import fr.bonobo.phonezen.viewmodel.MainViewModel
 
 @Composable
 fun ContactsScreen(vm: MainViewModel, onCall: (String) -> Unit) {
-    val c        = LocalColors.current
-    val query    by vm.searchQuery.collectAsState()
-    val loading  by vm.isLoading.collectAsState()
-    val filtered  = vm.filteredContacts()
-    val sorted    = filtered.sortedWith(compareByDescending<Contact> { it.isFavorite }.thenBy { it.name })
+    val c       = LocalColors.current
+    val query   by vm.searchQuery.collectAsState()
+    val loading by vm.isLoading.collectAsState()
+
+    // ── FIX étoile : on observe contacts directement via StateFlow ──
+    val contacts by vm.contacts.collectAsState()
+    val filtered = remember(contacts, query) {
+        val q = query.lowercase().trim()
+        if (q.isEmpty()) contacts
+        else contacts.filter { it.name.lowercase().contains(q) || it.phoneNumber.contains(q) }
+    }
+    val sorted = remember(filtered) {
+        filtered.sortedWith(compareByDescending<Contact> { it.isFavorite }.thenBy { it.name })
+    }
 
     Column(modifier = Modifier.fillMaxSize().background(c.background)) {
         Text(
@@ -103,29 +112,30 @@ private fun SectionLabel(text: String) {
 
 @Composable
 fun FavoritesScreen(vm: MainViewModel, onCall: (String) -> Unit) {
-    val c = LocalColors.current
-
-    // 1. On observe directement la liste 'favorites' du ViewModel (qui est déjà filtrée et triée par callCount)
+    val c         = LocalColors.current
     val favorites by vm.favorites.collectAsState()
 
     Column(modifier = Modifier.fillMaxSize().background(c.background)) {
-        Text(
-            text       = "Favoris",
-            fontSize   = 24.sp,
-            fontWeight = FontWeight.Bold,
-            color      = c.neonOrange,
-            modifier   = Modifier.padding(16.dp)
-        )
-
-        if (favorites.isEmpty()) {
-            EmptyState(
-                icon = Icons.Default.StarBorder,
-                message = "Aucun favori",
-                subtitle = "Appuyez sur ⭐ dans la liste"
+        Row(
+            modifier          = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text       = "Favoris",
+                fontSize   = 24.sp,
+                fontWeight = FontWeight.Bold,
+                color      = c.neonOrange,
+                modifier   = Modifier.weight(1f)
             )
+            if (favorites.isNotEmpty()) {
+                Text("Triés par appels", fontSize = 11.sp, color = c.textSecond)
+                Icon(Icons.Default.ArrowDownward, null, tint = c.textSecond, modifier = Modifier.size(12.dp))
+            }
+        }
+        if (favorites.isEmpty()) {
+            EmptyState(icon = Icons.Default.StarBorder, message = "Aucun favori", subtitle = "Appuyez sur ⭐ dans la liste")
         } else {
             LazyColumn(Modifier.fillMaxSize()) {
-                // 2. On affiche la liste telle quelle
                 items(favorites, key = { it.contactId }) { contact ->
                     ContactRow(contact = contact, onCall = onCall, vm = vm)
                     HorizontalDivider(color = c.glassStroke, thickness = 0.5.dp)
@@ -152,25 +162,38 @@ fun ContactRow(contact: Contact, onCall: (String) -> Unit, vm: MainViewModel) {
             ContactAvatar(name = contact.name, photoUri = contact.photoUri, size = 46)
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text(contact.name,        fontSize = 16.sp, color = c.textPrimary, fontWeight = FontWeight.Medium)
-                Text(contact.phoneNumber, fontSize = 13.sp, color = c.textSecond)
+                Text(contact.name, fontSize = 16.sp, color = c.textPrimary, fontWeight = FontWeight.Medium)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(contact.phoneNumber, fontSize = 13.sp, color = c.textSecond)
+                    if (contact.isFavorite && contact.callCount > 0) {
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text     = "📞 ${contact.callCount}",
+                            fontSize = 11.sp,
+                            color    = c.neonOrange.copy(alpha = 0.8f)
+                        )
+                    }
+                }
             }
 
             // Favori
             IconButton(onClick = { vm.toggleFavorite(contact.phoneNumber) }) {
                 Icon(
-                    imageVector = if (contact.isFavorite) Icons.Default.Star else Icons.Default.StarBorder,
+                    imageVector        = if (contact.isFavorite) Icons.Default.Star else Icons.Default.StarBorder,
                     contentDescription = "Favori",
-                    tint = if (contact.isFavorite) c.neonOrange else c.textSecond
+                    tint               = if (contact.isFavorite) c.neonOrange else c.textSecond
                 )
             }
 
             // Liste blanche
-            IconButton(onClick = { if (isWhitelisted) showWlDialog = true else vm.addToWhitelist(contact.phoneNumber) }) {
+            IconButton(onClick = {
+                if (isWhitelisted) showWlDialog = true
+                else vm.addToWhitelist(contact.phoneNumber)
+            }) {
                 Icon(
-                    imageVector = if (isWhitelisted) Icons.Default.Shield else Icons.Outlined.Shield,
+                    imageVector        = if (isWhitelisted) Icons.Default.Shield else Icons.Outlined.Shield,
                     contentDescription = "Liste blanche",
-                    tint = if (isWhitelisted) c.neonCyan else c.textSecond
+                    tint               = if (isWhitelisted) c.neonCyan else c.textSecond
                 )
             }
 

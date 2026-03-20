@@ -20,8 +20,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import fr.bonobo.phonezen.ui.theme.*
 import fr.bonobo.phonezen.viewmodel.MainViewModel
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 
 @Composable
 fun WhitelistScreen(vm: MainViewModel, onBack: () -> Unit = {}) {
@@ -47,7 +45,7 @@ fun WhitelistScreen(vm: MainViewModel, onBack: () -> Unit = {}) {
 
         // ── TopBar ──
         Row(
-            modifier          = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
+            modifier          = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 38.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = onBack) {

@@ -184,10 +184,11 @@ fun SettingsScreen(
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 listOf(
-                    "❌ Ne rappelez jamais un numéro inconnu surtaxé",
-                    "❌ Ne donnez jamais vos codes bancaires",
-                    "✅ Signalez les arnaques sur signal-spam.fr",
-                    "✅ 33700 pour signaler un SMS spam"
+                    " ❌ Ne rappelez jamais un numéro inconnu après un appel en absence (arnaque ping call)",
+                    " ❌ Ne donnez jamais vos codes bancaires ou identifiants par téléphone",
+                    " ❌ Méfiez-vous des numéros commençant par 08 ou très courts",
+                    " ✅ Inscrivez-vous sur Bloctel pour réduire le démarchage",
+                    " ✅ Signalez les appels abusifs au 33700 (SMS ou site officiel)"
                 ).forEach { tip ->
                     Text(tip, fontSize = 13.sp, color = c.textSecond, modifier = Modifier.padding(vertical = 2.dp))
                 }
@@ -198,7 +199,7 @@ fun SettingsScreen(
 
         SettingItem(
             icon     = Icons.Default.Info,
-            title    = "PhoneZen v1.2",
+            title    = "PhoneZen",
             subtitle = "Développé par Franck R-F (souffly007) · GPL v3",
             onClick  = {
                 ctx.startActivity(
