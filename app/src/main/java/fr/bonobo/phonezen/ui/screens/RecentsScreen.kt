@@ -7,8 +7,9 @@ import android.provider.CallLog
 import android.provider.MediaStore
 import android.widget.Toast
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -19,6 +20,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.snapshots.SnapshotStateSet
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -52,11 +54,14 @@ fun RecentsScreen(vm: MainViewModel, onCall: (String) -> Unit) {
     val hideBlocked    by vm.hideBlocked.collectAsState()
     val reportFeedback by vm.reportFeedback.collectAsState()
 
-    var activeFilter by remember { mutableStateOf(CallFilter.ALL) }
-    var searchQuery  by remember { mutableStateOf("") }
-    var showSearch   by remember { mutableStateOf(false) }
+    var activeFilter    by remember { mutableStateOf(CallFilter.ALL) }
+    var searchQuery     by remember { mutableStateOf("") }
+    var showSearch      by remember { mutableStateOf(false) }
 
-    // Snackbar pour le feedback signalement
+    // ── Sélection groupée ──
+    var selectionMode   by remember { mutableStateOf(false) }
+    val selectedNumbers = remember { mutableStateSetOf<String>() }
+
     val snackbarHostState = remember { SnackbarHostState() }
     LaunchedEffect(reportFeedback) {
         if (reportFeedback != null) {
@@ -70,6 +75,15 @@ fun RecentsScreen(vm: MainViewModel, onCall: (String) -> Unit) {
             if (hideBlocked && activeFilter != CallFilter.BLOCKED)
                 group.lastCall.type != CallLog.Calls.BLOCKED_TYPE && !group.calls.all { it.type == CallLog.Calls.BLOCKED_TYPE }
             else true
+        }
+        // ── Masquer les numéros masqués/privés sauf dans le filtre Bloqués ──
+        .filter { group ->
+            if (activeFilter != CallFilter.BLOCKED) {
+                val n = group.number.lowercase()
+                n.isNotBlank() && n != "-1" && n != "-2" &&
+                        !n.contains("unknown") && !n.contains("private") &&
+                        !n.contains("hidden") && !n.contains("anonymous")
+            } else true
         }
         .filter { group ->
             when (activeFilter) {
@@ -92,60 +106,92 @@ fun RecentsScreen(vm: MainViewModel, onCall: (String) -> Unit) {
     Scaffold(
         snackbarHost = {
             SnackbarHost(snackbarHostState) { data ->
-                Snackbar(
-                    snackbarData    = data,
-                    containerColor  = c.surfaceVar,
-                    contentColor    = c.textPrimary,
-                    actionColor     = c.neonCyan
-                )
+                Snackbar(snackbarData = data, containerColor = c.surfaceVar, contentColor = c.textPrimary, actionColor = c.neonCyan)
             }
         },
         containerColor = c.background
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().background(c.background).padding(padding)) {
 
-            // ── Header ──
-            Row(
-                modifier          = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text       = "JOURNAL",
-                    style      = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.ExtraBold,
-                    color      = c.neonOrange,
-                    modifier   = Modifier.weight(1f)
-                )
-                IconButton(onClick = { showSearch = !showSearch; if (!showSearch) searchQuery = "" }) {
-                    Icon(
-                        if (showSearch) Icons.Default.SearchOff else Icons.Default.Search,
-                        null,
-                        tint = if (showSearch) c.neonCyan else c.textSecond
+            // ── Barre de sélection OU header normal ──
+            if (selectionMode) {
+                Row(
+                    modifier          = Modifier
+                        .fillMaxWidth()
+                        .background(c.surfaceVar)
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = { selectionMode = false; selectedNumbers.clear() }) {
+                        Icon(Icons.Default.Close, null, tint = c.textPrimary)
+                    }
+                    Text(
+                        text       = "${selectedNumbers.size} sélectionné(s)",
+                        fontSize   = 16.sp,
+                        color      = c.textPrimary,
+                        fontWeight = FontWeight.Medium,
+                        modifier   = Modifier.weight(1f)
                     )
-                }
-                IconButton(onClick = { exportCsv(ctx, groups) }) {
-                    Icon(Icons.Default.FileDownload, null, tint = c.neonCyan)
-                }
-                val maskedCount = groups.count { group ->
-                    group.lastCall.type == CallLog.Calls.BLOCKED_TYPE ||
-                            group.calls.all { it.type == CallLog.Calls.BLOCKED_TYPE }
-                }
-                if (hideBlocked && maskedCount > 0 && activeFilter != CallFilter.BLOCKED) {
-                    Card(
-                        shape  = RoundedCornerShape(12.dp),
-                        colors = CardDefaults.cardColors(containerColor = c.neonRed.copy(alpha = 0.15f))
-                    ) {
+                    TextButton(onClick = {
+                        if (selectedNumbers.size == filtered.size) selectedNumbers.clear()
+                        else selectedNumbers.addAll(filtered.map { it.number })
+                    }) {
                         Text(
-                            text     = "🚫 $maskedCount",
-                            fontSize = 11.sp,
-                            color    = c.neonRed,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            if (selectedNumbers.size == filtered.size) "Désélectionner" else "Tout",
+                            color = c.neonCyan, fontSize = 13.sp
                         )
+                    }
+                    IconButton(
+                        onClick  = {
+                            selectedNumbers.forEach { vm.removeCallGroup(it) }
+                            selectedNumbers.clear()
+                            selectionMode = false
+                        },
+                        enabled = selectedNumbers.isNotEmpty()
+                    ) {
+                        Icon(
+                            Icons.Default.DeleteSweep,
+                            null,
+                            tint = if (selectedNumbers.isNotEmpty()) c.neonRed else c.textSecond
+                        )
+                    }
+                }
+            } else {
+                Row(
+                    modifier          = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text       = "JOURNAL",
+                        style      = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.ExtraBold,
+                        color      = c.neonOrange,
+                        modifier   = Modifier.weight(1f)
+                    )
+                    IconButton(onClick = { showSearch = !showSearch; if (!showSearch) searchQuery = "" }) {
+                        Icon(if (showSearch) Icons.Default.SearchOff else Icons.Default.Search, null,
+                            tint = if (showSearch) c.neonCyan else c.textSecond)
+                    }
+                    IconButton(onClick = { exportCsv(ctx, groups) }) {
+                        Icon(Icons.Default.FileDownload, null, tint = c.neonCyan)
+                    }
+                    val maskedCount = groups.count { group ->
+                        group.lastCall.type == CallLog.Calls.BLOCKED_TYPE ||
+                                group.calls.all { it.type == CallLog.Calls.BLOCKED_TYPE }
+                    }
+                    if (hideBlocked && maskedCount > 0 && activeFilter != CallFilter.BLOCKED) {
+                        Card(
+                            shape  = RoundedCornerShape(12.dp),
+                            colors = CardDefaults.cardColors(containerColor = c.neonRed.copy(alpha = 0.15f))
+                        ) {
+                            Text("🚫 $maskedCount", fontSize = 11.sp, color = c.neonRed,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp))
+                        }
                     }
                 }
             }
 
-            if (showSearch) {
+            if (showSearch && !selectionMode) {
                 OutlinedTextField(
                     value         = searchQuery,
                     onValueChange = { searchQuery = it },
@@ -169,35 +215,33 @@ fun RecentsScreen(vm: MainViewModel, onCall: (String) -> Unit) {
                 )
             }
 
-            LazyRow(
-                contentPadding        = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                items(CallFilter.entries) { filter ->
-                    FilterChip(
-                        selected    = activeFilter == filter,
-                        onClick     = { activeFilter = filter },
-                        label       = { Text(filter.label, fontSize = 12.sp) },
-                        leadingIcon = { Icon(filter.icon, null, modifier = Modifier.size(14.dp)) },
-                        colors      = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor   = c.neonCyan.copy(alpha = 0.2f),
-                            selectedLabelColor       = c.neonCyan,
-                            selectedLeadingIconColor = c.neonCyan,
-                            containerColor           = c.surfaceVar,
-                            labelColor               = c.textSecond,
-                            iconColor                = c.textSecond
+            if (!selectionMode) {
+                LazyRow(
+                    contentPadding        = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(CallFilter.entries) { filter ->
+                        FilterChip(
+                            selected    = activeFilter == filter,
+                            onClick     = { activeFilter = filter },
+                            label       = { Text(filter.label, fontSize = 12.sp) },
+                            leadingIcon = { Icon(filter.icon, null, modifier = Modifier.size(14.dp)) },
+                            colors      = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor   = c.neonCyan.copy(alpha = 0.2f),
+                                selectedLabelColor       = c.neonCyan,
+                                selectedLeadingIconColor = c.neonCyan,
+                                containerColor           = c.surfaceVar,
+                                labelColor               = c.textSecond,
+                                iconColor                = c.textSecond
+                            )
                         )
-                    )
+                    }
                 }
-            }
-
-            if (searchQuery.isNotBlank() || activeFilter != CallFilter.ALL) {
-                Text(
-                    text     = "${filtered.size} résultat${if (filtered.size > 1) "s" else ""}",
-                    fontSize = 12.sp,
-                    color    = c.textSecond,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp)
-                )
+                if (searchQuery.isNotBlank() || activeFilter != CallFilter.ALL) {
+                    Text("${filtered.size} résultat${if (filtered.size > 1) "s" else ""}",
+                        fontSize = 12.sp, color = c.textSecond,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp))
+                }
             }
 
             if (loading) {
@@ -213,41 +257,93 @@ fun RecentsScreen(vm: MainViewModel, onCall: (String) -> Unit) {
             } else {
                 LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 16.dp)) {
                     items(filtered, key = { it.number }) { group ->
-                        val dismissState = rememberSwipeToDismissBoxState(
-                            confirmValueChange = { value ->
-                                if (value != SwipeToDismissBoxValue.Settled) { vm.removeCallGroup(group.number); true } else false
-                            }
-                        )
-                        SwipeToDismissBox(
-                            state             = dismissState,
-                            backgroundContent = {
-                                val color by animateColorAsState(
-                                    targetValue = when (dismissState.dismissDirection) {
-                                        SwipeToDismissBoxValue.StartToEnd,
-                                        SwipeToDismissBoxValue.EndToStart -> c.neonRed.copy(alpha = 0.85f)
-                                        else -> c.background
+                        val isSelected = selectedNumbers.contains(group.number)
+
+                        if (selectionMode) {
+                            // ── Mode sélection : checkbox à gauche ──
+                            Row(
+                                modifier          = Modifier
+                                    .fillMaxWidth()
+                                    .background(if (isSelected) c.neonCyan.copy(alpha = 0.08f) else c.background)
+                                    .combinedClickable(
+                                        onClick     = {
+                                            if (isSelected) selectedNumbers.remove(group.number)
+                                            else selectedNumbers.add(group.number)
+                                        },
+                                        onLongClick = {
+                                            selectionMode = false
+                                            selectedNumbers.clear()
+                                        }
+                                    )
+                                    .padding(start = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Checkbox(
+                                    checked         = isSelected,
+                                    onCheckedChange = {
+                                        if (it) selectedNumbers.add(group.number)
+                                        else selectedNumbers.remove(group.number)
                                     },
-                                    label = "swipe_bg"
+                                    colors = CheckboxDefaults.colors(
+                                        checkedColor   = c.neonCyan,
+                                        uncheckedColor = c.textSecond
+                                    )
                                 )
-                                val alignment = when (dismissState.dismissDirection) {
-                                    SwipeToDismissBoxValue.EndToStart -> Alignment.CenterEnd
-                                    else -> Alignment.CenterStart
-                                }
-                                Box(
-                                    modifier         = Modifier.fillMaxSize().background(color).padding(horizontal = 24.dp),
-                                    contentAlignment = alignment
-                                ) {
-                                    Icon(Icons.Default.Delete, "Supprimer", tint = Color.White, modifier = Modifier.size(28.dp))
+                                Box(Modifier.weight(1f)) {
+                                    CallGroupRow(
+                                        group       = group,
+                                        onCall      = onCall,
+                                        onBlock     = { vm.blockNumber(it) },
+                                        onReport    = { number, tag -> vm.reportNumber(number, tag) },
+                                        vm          = vm,
+                                        selectionMode = true,
+                                        onLongClick = {}
+                                    )
                                 }
                             }
-                        ) {
-                            CallGroupRow(
-                                group    = group,
-                                onCall   = onCall,
-                                onBlock  = { vm.blockNumber(it) },
-                                onReport = { number, tag -> vm.reportNumber(number, tag) },
-                                vm       = vm
+                        } else {
+                            // ── Mode normal : swipe pour supprimer ──
+                            val dismissState = rememberSwipeToDismissBoxState(
+                                confirmValueChange = { value ->
+                                    if (value != SwipeToDismissBoxValue.Settled) { vm.removeCallGroup(group.number); true } else false
+                                }
                             )
+                            SwipeToDismissBox(
+                                state             = dismissState,
+                                backgroundContent = {
+                                    val color by animateColorAsState(
+                                        targetValue = when (dismissState.dismissDirection) {
+                                            SwipeToDismissBoxValue.StartToEnd,
+                                            SwipeToDismissBoxValue.EndToStart -> c.neonRed.copy(alpha = 0.85f)
+                                            else -> c.background
+                                        },
+                                        label = "swipe_bg"
+                                    )
+                                    val alignment = when (dismissState.dismissDirection) {
+                                        SwipeToDismissBoxValue.EndToStart -> Alignment.CenterEnd
+                                        else -> Alignment.CenterStart
+                                    }
+                                    Box(
+                                        modifier         = Modifier.fillMaxSize().background(color).padding(horizontal = 24.dp),
+                                        contentAlignment = alignment
+                                    ) {
+                                        Icon(Icons.Default.Delete, "Supprimer", tint = Color.White, modifier = Modifier.size(28.dp))
+                                    }
+                                }
+                            ) {
+                                CallGroupRow(
+                                    group         = group,
+                                    onCall        = onCall,
+                                    onBlock       = { vm.blockNumber(it) },
+                                    onReport      = { number, tag -> vm.reportNumber(number, tag) },
+                                    vm            = vm,
+                                    selectionMode = false,
+                                    onLongClick   = {
+                                        selectionMode = true
+                                        selectedNumbers.add(group.number)
+                                    }
+                                )
+                            }
                         }
                         HorizontalDivider(color = c.glassStroke, thickness = 0.5.dp)
                     }
@@ -290,28 +386,32 @@ private fun exportCsv(ctx: Context, groups: List<CallGroup>) {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun CallGroupRow(
-    group   : CallGroup,
-    onCall  : (String) -> Unit,
-    onBlock : (String) -> Unit,
-    onReport: (String, String) -> Unit,
-    vm      : MainViewModel
+    group        : CallGroup,
+    onCall       : (String) -> Unit,
+    onBlock      : (String) -> Unit,
+    onReport     : (String, String) -> Unit,
+    vm           : MainViewModel,
+    selectionMode: Boolean = false,
+    onLongClick  : () -> Unit = {}
 ) {
-    val c           = LocalColors.current
-    var expanded    by remember { mutableStateOf(false) }
-    var showMenu    by remember { mutableStateOf(false) }
-    var showReport  by remember { mutableStateOf(false) }
-
-    // Badge communautaire
-    val reported    = vm.isReported(group.number)
-    val isSuspect   = reported != null
+    val c          = LocalColors.current
+    var expanded   by remember { mutableStateOf(false) }
+    var showMenu   by remember { mutableStateOf(false) }
+    var showReport by remember { mutableStateOf(false) }
+    val reported   = vm.isReported(group.number)
+    val isSuspect  = reported != null
 
     Column {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable { expanded = !expanded }
+                .combinedClickable(
+                    onClick     = { if (!selectionMode) expanded = !expanded },
+                    onLongClick = onLongClick
+                )
                 .background(c.background)
                 .padding(horizontal = 16.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -350,7 +450,6 @@ fun CallGroupRow(
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(PhoneUtils.formatTimestamp(group.lastCall.timestamp), fontSize = 12.sp, color = c.textSecond)
-                    // ── Badge communautaire ──
                     if (isSuspect) {
                         Spacer(Modifier.width(6.dp))
                         Card(
@@ -368,37 +467,28 @@ fun CallGroupRow(
                 }
             }
 
-            IconButton(onClick = { onCall(group.number) }) {
-                Icon(Icons.Default.Call, null, tint = c.neonGreen)
-            }
-
-            Box {
-                IconButton(onClick = { showMenu = true }) {
-                    Icon(Icons.Default.MoreVert, null, tint = c.textSecond)
+            if (!selectionMode) {
+                IconButton(onClick = { onCall(group.number) }) {
+                    Icon(Icons.Default.Call, null, tint = c.neonGreen)
                 }
-                DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-                    DropdownMenuItem(
-                        text    = { Text("📞 Rappeler") },
-                        onClick = { onCall(group.number); showMenu = false }
-                    )
-                    DropdownMenuItem(
-                        text    = { Text("🚫 Bloquer") },
-                        onClick = { onBlock(group.number); showMenu = false }
-                    )
-                    DropdownMenuItem(
-                        text    = { Text("⚠️ Signaler à la communauté") },
-                        onClick = { showMenu = false; showReport = true }
-                    )
+                Box {
+                    IconButton(onClick = { showMenu = true }) {
+                        Icon(Icons.Default.MoreVert, null, tint = c.textSecond)
+                    }
+                    DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                        DropdownMenuItem(text = { Text("📞 Rappeler") }, onClick = { onCall(group.number); showMenu = false })
+                        DropdownMenuItem(text = { Text("🚫 Bloquer") }, onClick = { onBlock(group.number); showMenu = false })
+                        DropdownMenuItem(text = { Text("⚠️ Signaler à la communauté") }, onClick = { showMenu = false; showReport = true })
+                    }
                 }
+                Icon(
+                    if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    null, tint = c.textSecond, modifier = Modifier.size(18.dp)
+                )
             }
-
-            Icon(
-                if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                null, tint = c.textSecond, modifier = Modifier.size(18.dp)
-            )
         }
 
-        if (expanded) {
+        if (expanded && !selectionMode) {
             group.calls.forEach { call ->
                 val (icon, color) = callTypeIcon(call.type)
                 Row(
@@ -417,24 +507,18 @@ fun CallGroupRow(
         }
     }
 
-    // ── Dialog : choisir le tag de signalement ──
     if (showReport) {
         ReportDialog(
-            number   = group.number,
-            name     = group.name,
-            onReport = { tag -> onReport(group.number, tag); showReport = false },
+            number    = group.number,
+            name      = group.name,
+            onReport  = { tag -> onReport(group.number, tag); showReport = false },
             onDismiss = { showReport = false }
         )
     }
 }
 
 @Composable
-private fun ReportDialog(
-    number   : String,
-    name     : String?,
-    onReport : (String) -> Unit,
-    onDismiss: () -> Unit
-) {
+private fun ReportDialog(number: String, name: String?, onReport: (String) -> Unit, onDismiss: () -> Unit) {
     val c    = LocalColors.current
     val tags = listOf("démarchage", "arnaque", "spam", "silence", "harcèlement", "autre")
     var selectedTag by remember { mutableStateOf("démarchage") }
@@ -442,21 +526,10 @@ private fun ReportDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor   = c.surfaceVar,
-        title = {
-            Text(
-                "Signaler à la communauté",
-                color      = c.textPrimary,
-                fontWeight = FontWeight.Bold
-            )
-        },
-        text = {
+        title = { Text("Signaler à la communauté", color = c.textPrimary, fontWeight = FontWeight.Bold) },
+        text  = {
             Column {
-                Text(
-                    text     = name ?: number,
-                    fontSize = 14.sp,
-                    color    = c.neonCyan,
-                    modifier = Modifier.padding(bottom = 12.dp)
-                )
+                Text(name ?: number, fontSize = 14.sp, color = c.neonCyan, modifier = Modifier.padding(bottom = 12.dp))
                 Text("Motif du signalement :", fontSize = 13.sp, color = c.textSecond)
                 Spacer(Modifier.height(8.dp))
                 tags.chunked(3).forEach { row ->
@@ -479,16 +552,8 @@ private fun ReportDialog(
                 }
             }
         },
-        confirmButton = {
-            TextButton(onClick = { onReport(selectedTag) }) {
-                Text("Signaler", color = c.neonRed, fontWeight = FontWeight.Bold)
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Annuler", color = c.textSecond)
-            }
-        }
+        confirmButton = { TextButton(onClick = { onReport(selectedTag) }) { Text("Signaler", color = c.neonRed, fontWeight = FontWeight.Bold) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Annuler", color = c.textSecond) } }
     )
 }
 

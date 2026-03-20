@@ -1,8 +1,8 @@
 package fr.bonobo.phonezen.ui.screens
 
-import android.telephony.TelephonyManager
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -21,236 +21,248 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import fr.bonobo.phonezen.ui.theme.*
+import fr.bonobo.phonezen.util.getCarrierName
+import fr.bonobo.phonezen.util.getVoicemailNumber
+import fr.bonobo.phonezen.viewmodel.MainViewModel
 
 data class Key(val main: String, val sub: String = "")
 
 val DIAL_KEYS = listOf(
-    Key("1", "RÉP"),         Key("2", "ABC"),  Key("3", "DEF"),
-    Key("4", "GHI"),  Key("5", "JKL"),  Key("6", "MNO"),
-    Key("7", "PQRS"), Key("8", "TUV"),  Key("9", "WXYZ"),
-    Key("*"),         Key("0", "+"),    Key("#")
+    Key("1", "RÉP"), Key("2", "ABC"), Key("3", "DEF"),
+    Key("4", "GHI"), Key("5", "JKL"), Key("6", "MNO"),
+    Key("7", "PQRS"), Key("8", "TUV"), Key("9", "WXYZ"),
+    Key("*"), Key("0", "+"), Key("#")
 )
-
-// ── Numéros de messagerie par opérateur ──
-// Format : numéro composable (sans espaces) → affiché proprement dans le bouton
-private val VOICEMAIL_NUMBERS = mapOf(
-    // --- OPÉRATEURS NATIONAUX ---
-    "orange"                   to "+33608080808",
-    "sosh"                     to "+33608080808",
-    "sfr"                      to "+33612000123",
-    "red"                      to "+33612000123",
-    "red by sfr"               to "+33612000123",
-    "bouygues"                 to "+33660660001",
-    "bouygues telecom"         to "+33660660001",
-    "b&you"                    to "+33660660001",
-    "free mobile"              to "+33695600012", // Corrigé : Accès direct répondeur
-    "free"                     to "+33695600012",
-
-    // --- MVNO RÉSEAU SFR ---
-    "la poste mobile"          to "+33612000123",
-    "la poste"                 to "+33612000123",
-    "prixtel"                  to "+33612000123",
-    "coriolis"                 to "+33612000123",
-    "réglo mobile"             to "+33612000123",
-    "réglo"                    to "+33612000123",
-
-    // --- MVNO RÉSEAU BOUYGUES (ex-EI Telecom) ---
-    // Ces numéros utilisent désormais la passerelle technique de Bouygues
-    "nrj mobile"               to "+33771212777",
-    "nrj"                      to "+33771212777",
-    "cic mobile"               to "+33771212777",
-    "crédit mutuel mobile"     to "+33771212777",
-    "auchan telecom"           to "+33771212777",
-    "auchan"                   to "+33771212777",
-
-    // --- MVNO RÉSEAU ORANGE / AUTRES ---
-    "syma mobile"              to "+33608080808",
-    "syma"                     to "+33608080808",
-    "youprice"                 to "+33608080808",
-    "lebara"                   to "+33680802345", // Passerelle spécifique Lebara
-    "lycamobile"               to "+33751000121", // Passerelle spécifique Lyca
-
-    // --- CAS PARTICULIERS ---
-    "la banque postale sfr"    to "+33612000123",
-    "la banque postale bgt"    to "+33660660001"
-)
-private const val VOICEMAIL_FALLBACK = "123"
-
-fun detectVoicemailNumber(context: android.content.Context): String {
-    return try {
-        val tm       = context.getSystemService(TelephonyManager::class.java)
-        val operator = tm?.networkOperatorName?.lowercase()?.trim() ?: ""
-        val match    = VOICEMAIL_NUMBERS.entries.firstOrNull { (key, _) -> operator.contains(key) }
-        match?.value ?: VOICEMAIL_FALLBACK
-    } catch (e: Exception) {
-        VOICEMAIL_FALLBACK
-    }
-}
-
-fun detectOperatorName(context: android.content.Context): String {
-    return try {
-        val tm = context.getSystemService(TelephonyManager::class.java)
-        tm?.networkOperatorName?.ifBlank { "Opérateur inconnu" } ?: "Opérateur inconnu"
-    } catch (e: Exception) {
-        "Opérateur inconnu"
-    }
-}
 
 private fun isUssdCode(number: String): Boolean =
-    number.matches(Regex("^[*#][0-9*#]+#?$")) || number.startsWith("*#") || number.startsWith("#")
-
-private fun isValidNumber(number: String): Boolean {
-    val cleaned = number.replace(Regex("[\\s.\\-()]"), "")
-    return cleaned.matches(Regex("^[+]?[0-9]{6,15}$"))
-}
+    number.matches(Regex("^[*#][0-9*#]+#?$")) ||
+            number.startsWith("*#") || number.startsWith("#")
 
 @Composable
-fun DialKey(key: Key, onTap: () -> Unit, onLongPress: (() -> Unit)? = null) {
+fun DialKey(
+    key        : Key,
+    onTap      : () -> Unit,
+    onLongPress: (() -> Unit)? = null,
+    size       : Dp = 72.dp,
+    fontSize   : Float = 26f
+) {
     val c = LocalColors.current
     Box(
         modifier = Modifier
-            .size(72.dp)
+            .size(size)
             .clip(CircleShape)
             .pointerInput(key.main) {
-                detectTapGestures(onTap = { onTap() }, onLongPress = { onLongPress?.invoke() })
+                detectTapGestures(
+                    onTap       = { onTap() },
+                    onLongPress = { onLongPress?.invoke() }
+                )
             },
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(text = key.main, fontSize = 26.sp, fontWeight = FontWeight.Bold, color = c.neonOrange)
+            Text(key.main, fontSize = fontSize.sp, fontWeight = FontWeight.Bold, color = c.neonOrange)
             if (key.sub.isNotEmpty()) {
-                Text(text = key.sub, fontSize = 9.sp, color = c.textSecond)
+                Text(key.sub, fontSize = (fontSize * 0.35f).sp, color = c.textSecond)
             }
         }
     }
 }
 
 @Composable
-fun KeypadScreen(onCall: (String) -> Unit, onVoicemail: () -> Unit) {
+fun KeypadScreen(
+    onCall     : (String) -> Unit,
+    onVoicemail: () -> Unit,
+    vm         : MainViewModel
+) {
     val c               = LocalColors.current
     val context         = LocalContext.current
     var number          by remember { mutableStateOf("") }
-    val isUssd           = remember(number) { isUssdCode(number) }
-    val voicemailNumber  = remember { detectVoicemailNumber(context) }
-    val operatorName     = remember { detectOperatorName(context) }
 
-    fun handleCall() {
-        if (number.isEmpty()) return
-        if (isUssd || isValidNumber(number) || number.length >= 3) onCall(number)
-    }
+    val voicemailNumber = remember { getVoicemailNumber(context) }
+    val operatorName    = remember { getCarrierName(context) ?: "Messagerie" }
+    val suggestions     = vm.getSuggestions(number)
+    val isUssd          = remember(number) { isUssdCode(number) }
 
-    Column(
-        modifier            = Modifier.fillMaxSize().background(c.background).padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+    BoxWithConstraints(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(c.background)
+            .padding(horizontal = 16.dp)
     ) {
-        Text(
-            if (isUssd) "CODE MMI / USSD" else "CLAVIER",
-            style      = MaterialTheme.typography.titleLarge,
-            color      = if (isUssd) c.neonCyan else c.neonOrange,
-            modifier   = Modifier.padding(vertical = 16.dp),
-            fontWeight = FontWeight.ExtraBold
-        )
+        val screenH = maxHeight
 
-        Card(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
-            shape    = RoundedCornerShape(16.dp),
-            colors   = CardDefaults.cardColors(
-                containerColor = if (isUssd) c.neonCyan.copy(alpha = 0.08f) else c.surface
-            )
+        // ── Calcul adaptatif selon la hauteur disponible ──
+        val isSmall  = screenH < 600.dp
+        val isMedium = screenH < 750.dp
+
+        val keySize      = when { isSmall -> 58.dp;  isMedium -> 66.dp;  else -> 74.dp }
+        val keyFontSize  = when { isSmall -> 22f;    isMedium -> 24f;    else -> 27f   }
+        val fabSize      = when { isSmall -> 60.dp;  isMedium -> 68.dp;  else -> 74.dp }
+        val actionSize   = when { isSmall -> 48.dp;  isMedium -> 52.dp;  else -> 56.dp }
+        val displayH     = when { isSmall -> 50.dp;  isMedium -> 58.dp;  else -> 64.dp }
+        val titleSize    = when { isSmall -> 14f;    isMedium -> 15f;    else -> 16f   }
+        val spacingOuter = when { isSmall -> 4.dp;   isMedium -> 8.dp;   else -> 12.dp }
+        val spacingInner = when { isSmall -> 2.dp;   isMedium -> 4.dp;   else -> 6.dp  }
+
+        Column(
+            modifier            = Modifier.fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.SpaceEvenly
         ) {
-            Box(
-                modifier         = Modifier.fillMaxWidth().height(80.dp).padding(horizontal = 20.dp),
-                contentAlignment = Alignment.Center
-            ) {
+
+            // ── Bloc 1 : Titre + numéro ──
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
-                    text       = number.ifEmpty { "Composez un numéro" },
-                    fontSize   = if (number.isEmpty()) 16.sp else 28.sp,
-                    fontWeight = FontWeight.Bold,
-                    color      = when {
-                        number.isEmpty() -> c.textSecond
-                        isUssd           -> c.neonCyan
-                        else             -> c.textPrimary
-                    },
-                    textAlign = TextAlign.Center,
-                    maxLines  = 1
+                    text       = if (isUssd) "CODE USSD" else "CLAVIER",
+                    fontSize   = titleSize.sp,
+                    color      = if (isUssd) c.neonCyan else c.neonOrange,
+                    fontWeight = FontWeight.ExtraBold
                 )
-            }
-        }
-
-        Spacer(Modifier.height(16.dp))
-
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
-            DIAL_KEYS.chunked(3).forEach { row ->
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    row.forEach { key ->
-                        DialKey(
-                            key         = key,
-                            onTap       = { number += key.main },
-                            onLongPress = {
-                                when (key.main) {
-                                    "0" -> number += "+"
-                                    "1" -> onCall(voicemailNumber)
-                                }
-                            }
+                Spacer(Modifier.height(spacingInner))
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape    = RoundedCornerShape(14.dp),
+                    colors   = CardDefaults.cardColors(
+                        containerColor = if (isUssd) c.neonCyan.copy(0.1f) else c.surface
+                    )
+                ) {
+                    Box(
+                        modifier         = Modifier.fillMaxWidth().height(displayH).padding(horizontal = 16.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text       = number.ifEmpty { "Composez un numéro" },
+                            fontSize   = if (number.isEmpty()) 15.sp else 26.sp,
+                            fontWeight = FontWeight.Bold,
+                            color      = if (number.isEmpty()) c.textSecond else if (isUssd) c.neonCyan else c.textPrimary,
+                            textAlign  = TextAlign.Center,
+                            maxLines   = 1,
+                            overflow   = TextOverflow.Ellipsis
                         )
                     }
                 }
-                Spacer(Modifier.height(4.dp))
+                // Suggestions
+                if (suggestions.isNotEmpty()) {
+                    Spacer(Modifier.height(spacingInner))
+                    Row(
+                        modifier              = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        suggestions.forEach { contact ->
+                            Surface(
+                                modifier = Modifier
+                                    .padding(horizontal = 3.dp)
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .border(1.dp, c.neonCyan.copy(0.4f), RoundedCornerShape(14.dp))
+                                    .clickable { onCall(contact.phoneNumber) },
+                                color = c.neonCyan.copy(0.12f)
+                            ) {
+                                Text(
+                                    text       = contact.name,
+                                    modifier   = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                    fontSize   = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color      = c.neonCyan
+                                )
+                            }
+                        }
+                    }
+                }
             }
-        }
 
-        Row(
-            modifier              = Modifier.fillMaxWidth().padding(bottom = 16.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-            verticalAlignment     = Alignment.CenterVertically
-        ) {
-            FilledIconButton(
-                onClick  = { if (number.isNotEmpty()) number = number.dropLast(1) },
-                modifier = Modifier.size(60.dp),
-                colors   = IconButtonDefaults.filledIconButtonColors(containerColor = c.surfaceVar)
+            // ── Bloc 2 : Pavé numérique ──
+            Column(
+                modifier            = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Icon(Icons.Default.Backspace, contentDescription = "Effacer", tint = c.neonRed)
+                DIAL_KEYS.chunked(3).forEach { row ->
+                    Row(
+                        modifier              = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        verticalAlignment     = Alignment.CenterVertically
+                    ) {
+                        row.forEach { key ->
+                            DialKey(
+                                key         = key,
+                                onTap       = { number += key.main },
+                                onLongPress = {
+                                    if (key.main == "0") number += "+"
+                                    if (key.main == "1") onCall(voicemailNumber)
+                                },
+                                size      = keySize,
+                                fontSize  = keyFontSize
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(spacingInner))
+                }
             }
 
-            FloatingActionButton(
-                onClick        = { handleCall() },
-                modifier       = Modifier.size(80.dp),
-                containerColor = if (isUssd) c.neonCyan else c.neonGreen,
-                shape          = CircleShape,
-                elevation      = FloatingActionButtonDefaults.elevation(defaultElevation = 0.dp)
+            // ── Bloc 3 : Actions + Messagerie ──
+            Column(
+                modifier            = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Icon(Icons.Default.Call, contentDescription = "Appeler", tint = Color.White, modifier = Modifier.size(38.dp))
-            }
+                Row(
+                    modifier              = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment     = Alignment.CenterVertically
+                ) {
+                    FilledIconButton(
+                        onClick  = { if (number.isNotEmpty()) number = number.dropLast(1) },
+                        modifier = Modifier.size(actionSize),
+                        colors   = IconButtonDefaults.filledIconButtonColors(containerColor = c.surface)
+                    ) {
+                        Icon(Icons.Default.Backspace, null, tint = c.neonRed)
+                    }
 
-            FilledIconButton(
-                onClick  = { number = "" },
-                modifier = Modifier.size(60.dp),
-                colors   = IconButtonDefaults.filledIconButtonColors(containerColor = c.surfaceVar)
-            ) {
-                Text("C", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = c.neonOrange)
-            }
-        }
+                    FloatingActionButton(
+                        onClick        = { if (number.isNotEmpty()) onCall(number) },
+                        modifier       = Modifier.size(fabSize),
+                        containerColor = if (isUssd) c.neonCyan else c.neonGreen,
+                        shape          = CircleShape
+                    ) {
+                        Icon(Icons.Default.Call, null, tint = Color.White,
+                            modifier = Modifier.size((fabSize.value * 0.47f).dp))
+                    }
 
-        // ── Bouton messagerie avec opérateur détecté ──
-        OutlinedButton(
-            onClick  = { onCall(voicemailNumber) },
-            modifier = Modifier.fillMaxWidth().height(56.dp),
-            shape    = RoundedCornerShape(12.dp),
-            border   = BorderStroke(1.dp, c.glassStroke),
-            colors   = ButtonDefaults.outlinedButtonColors(containerColor = c.surface, contentColor = c.textPrimary)
-        ) {
-            Icon(Icons.Default.Voicemail, contentDescription = null, tint = c.neonCyan)
-            Spacer(Modifier.width(12.dp))
-            Column {
-                Text("MESSAGERIE", letterSpacing = 2.sp, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                Text(
-                    "$operatorName · $voicemailNumber",
-                    fontSize = 10.sp,
-                    color    = c.textSecond
-                )
+                    FilledIconButton(
+                        onClick  = { number = "" },
+                        modifier = Modifier.size(actionSize),
+                        colors   = IconButtonDefaults.filledIconButtonColors(containerColor = c.surface)
+                    ) {
+                        Text("C", fontSize = (actionSize.value * 0.38f).sp,
+                            fontWeight = FontWeight.Bold, color = c.neonOrange)
+                    }
+                }
+
+                Spacer(Modifier.height(spacingOuter))
+
+                OutlinedButton(
+                    onClick  = { onCall(voicemailNumber) },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape    = RoundedCornerShape(12.dp),
+                    colors   = ButtonDefaults.outlinedButtonColors(
+                        containerColor = c.surface,
+                        contentColor   = c.textPrimary
+                    )
+                ) {
+                    Icon(Icons.Default.Voicemail, null, tint = c.neonCyan,
+                        modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Column(horizontalAlignment = Alignment.Start) {
+                        Text("MESSAGERIE", fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp, color = c.textPrimary)
+                        Text("$operatorName · $voicemailNumber",
+                            fontSize = 11.sp, color = c.textSecond,
+                            maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
             }
         }
     }

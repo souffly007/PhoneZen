@@ -5,7 +5,6 @@
 // PhoneZen is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License.
-
 package fr.bonobo.phonezen
 
 import android.Manifest
@@ -16,6 +15,8 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.telephony.TelephonyManager
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -33,6 +34,48 @@ class MainActivity : ComponentActivity() {
     private val vm: MainViewModel by viewModels()
     private val themeVm: ThemeViewModel by viewModels()
     private var rolesRequested = false
+
+    // ══════════════════════════════════════════════════════════════
+    // NUMÉROS DE MESSAGERIE PAR OPÉRATEUR
+    // ══════════════════════════════════════════════════════════════
+    private val voicemailNumbers = mapOf(
+        // Opérateurs principaux
+        "orange" to "888",
+        "sosh" to "888",
+        "sfr" to "123",
+        "red" to "123",
+        "red by sfr" to "123",
+        "bouygues" to "660",
+        "bouygues telecom" to "660",
+        "b&you" to "660",
+        "free" to "666",
+        "free mobile" to "666",
+
+        // MVNO réseau Orange
+        "syma" to "888",
+        "syma mobile" to "888",
+        "youprice" to "888",
+
+        // MVNO réseau SFR
+        "la poste mobile" to "123",
+        "la poste" to "123",
+        "prixtel" to "123",
+        "coriolis" to "123",
+        "réglo mobile" to "123",
+        "réglo" to "123",
+
+        // MVNO réseau Bouygues
+        "nrj mobile" to "660",
+        "nrj" to "660",
+        "cic mobile" to "660",
+        "crédit mutuel mobile" to "660",
+        "auchan telecom" to "660",
+        "cdiscount mobile" to "660",
+
+        // Autres MVNO
+        "lebara" to "5765",
+        "lycamobile" to "121"
+    )
 
     private val requiredPermissions = mutableListOf(
         Manifest.permission.READ_CALL_LOG,
@@ -57,7 +100,6 @@ class MainActivity : ComponentActivity() {
     private val roleLauncher =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
             // Ne PAS remettre rolesRequested à false ici
-            // pour éviter la boucle infinie sur les rôles refusés
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -70,13 +112,69 @@ class MainActivity : ComponentActivity() {
                     vm          = vm,
                     themeVm     = themeVm,
                     onCall      = { number -> launchCall(number) },
-                    onVoicemail = { launchCall("123") }
+                    onVoicemail = { launchVoicemail() }  // ✅ Détection auto
                 )
             }
         }
 
         checkPermissions()
     }
+
+    // ══════════════════════════════════════════════════════════════
+    // MESSAGERIE VOCALE - DÉTECTION AUTOMATIQUE
+    // ══════════════════════════════════════════════════════════════
+
+    private fun launchVoicemail() {
+        val number = getVoicemailNumber()
+        Log.d("PhoneZen", "Appel messagerie: $number (opérateur: ${getCarrierName()})")
+        launchCall(number)
+    }
+
+    private fun getVoicemailNumber(): String {
+        // 1. Essayer le numéro système configuré par l'opérateur
+        getSystemVoicemailNumber()?.let { return it }
+
+        // 2. Chercher par nom d'opérateur
+        val carrier = getCarrierName()?.lowercase()?.trim()
+
+        if (carrier != null) {
+            // Recherche exacte
+            voicemailNumbers[carrier]?.let { return it }
+
+            // Recherche partielle (ex: "Free Mobile" contient "free")
+            voicemailNumbers.entries.find { (key, _) ->
+                carrier.contains(key) || key.contains(carrier)
+            }?.let { return it.value }
+        }
+
+        // 3. Fallback universel
+        return "123"
+    }
+
+    private fun getSystemVoicemailNumber(): String? {
+        return try {
+            val tm = getSystemService(Context.TELEPHONY_SERVICE) as TelephonyManager
+            tm.voiceMailNumber?.takeIf { it.isNotBlank() && it != "null" }
+        } catch (e: SecurityException) {
+            null
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    private fun getCarrierName(): String? {
+        return try {
+            val tm = getSystemService(Context.TELEPHONY_SERVICE) as TelephonyManager
+            tm.networkOperatorName.takeIf { it.isNotBlank() }
+                ?: tm.simOperatorName.takeIf { it.isNotBlank() }
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // PERMISSIONS & RÔLES
+    // ══════════════════════════════════════════════════════════════
 
     private fun checkPermissions() {
         val missing = requiredPermissions.filter {
@@ -112,6 +210,10 @@ class MainActivity : ComponentActivity() {
             return
         }
     }
+
+    // ══════════════════════════════════════════════════════════════
+    // APPELS
+    // ══════════════════════════════════════════════════════════════
 
     private fun launchCall(number: String) {
         try {

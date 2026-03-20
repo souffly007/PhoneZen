@@ -38,7 +38,7 @@ fun TopReportedScreen(
 
         // ── TopBar ──
         Row(
-            modifier          = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
+            modifier          = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 42.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = onBack) {

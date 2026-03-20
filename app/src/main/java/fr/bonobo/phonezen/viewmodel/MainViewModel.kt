@@ -22,51 +22,51 @@ import kotlinx.coroutines.withContext
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
 
-    private val prefs = app.getSharedPreferences("phonezen_prefs", Context.MODE_PRIVATE)
-    private val db = AppDatabase.getDatabase(app)
-    val spamDetector = SpamDetector(app)
+    private val prefs      = app.getSharedPreferences("phonezen_prefs", Context.MODE_PRIVATE)
+    private val db         = AppDatabase.getDatabase(app)
+    val spamDetector       = SpamDetector(app)
     private val reportRepo = ReportRepository()
 
     // ── Données principales ──
-    private val _callGroups = MutableStateFlow<List<CallGroup>>(emptyList())
+    private val _callGroups   = MutableStateFlow<List<CallGroup>>(emptyList())
     val callGroups: StateFlow<List<CallGroup>> = _callGroups
 
-    private val _contacts = MutableStateFlow<List<Contact>>(emptyList())
+    private val _contacts     = MutableStateFlow<List<Contact>>(emptyList())
     val contacts: StateFlow<List<Contact>> = _contacts
 
-    private val _favorites = MutableStateFlow<List<Contact>>(emptyList())
+    private val _favorites    = MutableStateFlow<List<Contact>>(emptyList())
     val favorites: StateFlow<List<Contact>> = _favorites
 
     private val _blockedCalls = MutableStateFlow<List<BlockedCall>>(emptyList())
     val blockedCalls: StateFlow<List<BlockedCall>> = _blockedCalls
 
-    private val _searchQuery = MutableStateFlow("")
+    private val _searchQuery  = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery
 
-    private val _isLoading = MutableStateFlow(false)
+    private val _isLoading    = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading
 
     // ── Paramètres protection ──
     private val _blockPrivate = MutableStateFlow(spamDetector.isBlockPrivateEnabled())
     val blockPrivate: StateFlow<Boolean> = _blockPrivate
 
-    private val _hideBlocked = MutableStateFlow(prefs.getBoolean("hide_blocked", true))
+    private val _hideBlocked  = MutableStateFlow(prefs.getBoolean("hide_blocked", true))
     val hideBlocked: StateFlow<Boolean> = _hideBlocked
 
     // ── Horaires de blocage ──
-    private val _scheduleEnabled = MutableStateFlow(spamDetector.isScheduleEnabled())
+    private val _scheduleEnabled     = MutableStateFlow(spamDetector.isScheduleEnabled())
     val scheduleEnabled: StateFlow<Boolean> = _scheduleEnabled
 
-    private val _scheduleStartHour = MutableStateFlow(spamDetector.getScheduleStartHour())
+    private val _scheduleStartHour   = MutableStateFlow(spamDetector.getScheduleStartHour())
     val scheduleStartHour: StateFlow<Int> = _scheduleStartHour
 
     private val _scheduleStartMinute = MutableStateFlow(spamDetector.getScheduleStartMinute())
     val scheduleStartMinute: StateFlow<Int> = _scheduleStartMinute
 
-    private val _scheduleEndHour = MutableStateFlow(spamDetector.getScheduleEndHour())
+    private val _scheduleEndHour     = MutableStateFlow(spamDetector.getScheduleEndHour())
     val scheduleEndHour: StateFlow<Int> = _scheduleEndHour
 
-    private val _scheduleEndMinute = MutableStateFlow(spamDetector.getScheduleEndMinute())
+    private val _scheduleEndMinute   = MutableStateFlow(spamDetector.getScheduleEndMinute())
     val scheduleEndMinute: StateFlow<Int> = _scheduleEndMinute
 
     // ── Mode Ne pas déranger ──
@@ -94,74 +94,26 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // ─────────────────────────────────────────────
-    // GESTION DES APPELS ET TRI PAR UTILISATION
-    // ─────────────────────────────────────────────
-
-    /**
-     * Incrémente le compteur d'appels pour un numéro et met à jour l'UI.
-     */
-    fun incrementCallCount(number: String) {
-        val normalized = PhoneUtils.normalizeNumber(number)
-
-        // Incrémente et sauvegarde le compteur
-        val currentCount = prefs.getInt("count_$normalized", 0) + 1
-        prefs.edit().putInt("count_$normalized", currentCount).apply()
-
-        // Met à jour la liste des contacts en mémoire
-        _contacts.value = _contacts.value.map { contact ->
-            if (PhoneUtils.normalizeNumber(contact.phoneNumber) == normalized) {
-                contact.copy(callCount = currentCount)
-            } else {
-                contact
-            }
-        }
-
-        // Met à jour les favoris avec le nouveau tri
-        _favorites.value = _contacts.value
-            .filter { it.isFavorite }
-            .sortedByDescending { it.callCount }
-    }
-
-    private fun getCallCount(number: String): Int {
-        val normalized = PhoneUtils.normalizeNumber(number)
-        return prefs.getInt("count_$normalized", 0)
-    }
-
-    // ─────────────────────────────────────────────
-    // CHARGEMENT DES DONNÉES
+    // DONNÉES
     // ─────────────────────────────────────────────
     fun loadData(ctx: Context) {
         viewModelScope.launch {
             _isLoading.value = true
-            val favIds = getFavoriteIds()
-
-            val groups = withContext(Dispatchers.IO) { PhoneUtils.loadCallGroups(ctx, favIds) }
-            val contactsRaw = withContext(Dispatchers.IO) { PhoneUtils.loadContacts(ctx, favIds) }
-
-            // Injecte les callCounts stockés dans les SharedPreferences
-            val contactsWithScores = contactsRaw.map {
-                it.copy(callCount = getCallCount(it.phoneNumber))
-            }
-
+            val favIds       = getFavoriteIds()
+            val groups       = withContext(Dispatchers.IO) { PhoneUtils.loadCallGroups(ctx, favIds) }
+            val contactsList = withContext(Dispatchers.IO) { PhoneUtils.loadContacts(ctx, favIds) }
             _callGroups.value = groups
-            _contacts.value = contactsWithScores
-
-            // Tri des favoris par callCount décroissant
-            _favorites.value = contactsWithScores
-                .filter { it.isFavorite }
-                .sortedByDescending { it.callCount }
-
-            _isLoading.value = false
-
+            _contacts.value   = contactsList
+            _favorites.value  = contactsList.filter { it.isFavorite }.sortedByDescending { it.callCount }
+            _isLoading.value  = false
             checkReportedNumbers(groups.map { it.number })
         }
     }
 
     private fun checkReportedNumbers(numbers: List<String>) {
         viewModelScope.launch(Dispatchers.IO) {
-            val map = mutableMapOf<String, ReportedNumber>()
+            val map            = mutableMapOf<String, ReportedNumber>()
             val communityBlock = mutableSetOf<String>()
-
             numbers.forEach { number ->
                 val reported = reportRepo.checkNumber(number)
                 if (reported != null && reported.isSuspect()) {
@@ -172,34 +124,25 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     }
                 }
             }
-
             spamDetector.setCommunityBlockedNumbers(communityBlock)
-
             withContext(Dispatchers.Main) {
                 _reportedNumbers.value = map
             }
         }
     }
 
-    fun setSearchQuery(q: String) {
-        _searchQuery.value = q
-    }
+    fun setSearchQuery(q: String) { _searchQuery.value = q }
 
     fun filteredContacts(): List<Contact> {
         val q = _searchQuery.value.lowercase().trim()
-        val baseList = _contacts.value
-
-        return if (q.isEmpty()) {
-            baseList // La liste est déjà triée ou sera triée par l'UI
-        } else {
-            baseList.filter {
-                it.name.lowercase().contains(q) || it.phoneNumber.contains(q)
-            }
+        return if (q.isEmpty()) _contacts.value
+        else _contacts.value.filter {
+            it.name.lowercase().contains(q) || it.phoneNumber.contains(q)
         }
     }
 
     // ─────────────────────────────────────────────
-    // SIGNALEMENT & PROTECTION
+    // LISTE PARTICIPATIVE
     // ─────────────────────────────────────────────
     fun reportNumber(number: String, tag: String = "indésirable") {
         viewModelScope.launch {
@@ -217,34 +160,23 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun clearReportFeedback() {
-        _reportFeedback.value = null
-    }
+    fun clearReportFeedback() { _reportFeedback.value = null }
 
-    fun isReported(number: String): ReportedNumber? {
-        val normalized = PhoneUtils.normalizeNumber(number)
-        return _reportedNumbers.value[normalized]
-    }
+    fun isReported(number: String): ReportedNumber? =
+        _reportedNumbers.value[PhoneUtils.normalizeNumber(number)]
 
     // ─────────────────────────────────────────────
     // FAVORIS
     // ─────────────────────────────────────────────
     fun toggleFavorite(number: String) {
-        val key = PhoneUtils.groupKey(number)
+        val key    = PhoneUtils.groupKey(number)
         val favIds = getFavoriteIds().toMutableSet()
         if (favIds.contains(key)) favIds.remove(key) else favIds.add(key)
-
         prefs.edit().putStringSet("favorites", favIds).apply()
-
-        _contacts.value = _contacts.value.map {
+        _contacts.value   = _contacts.value.map {
             it.copy(isFavorite = favIds.contains(PhoneUtils.groupKey(it.phoneNumber)))
         }
-
-        // Mise à jour et tri automatique des favoris
-        _favorites.value = _contacts.value
-            .filter { it.isFavorite }
-            .sortedByDescending { it.callCount }
-
+        _favorites.value  = _contacts.value.filter { it.isFavorite }.sortedByDescending { it.callCount }
         _callGroups.value = _callGroups.value.map {
             it.copy(isFavorite = favIds.contains(PhoneUtils.groupKey(it.number)))
         }
@@ -260,8 +192,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch(Dispatchers.IO) {
             db.blockedCallDao().insert(
                 BlockedCall(
-                    number = PhoneUtils.normalizeNumber(number),
-                    reason = reason,
+                    number    = PhoneUtils.normalizeNumber(number),
+                    reason    = reason,
                     riskLevel = "MANUAL"
                 )
             )
@@ -269,33 +201,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun deleteBlockedCall(call: BlockedCall) {
-        viewModelScope.launch(Dispatchers.IO) {
-            db.blockedCallDao().deleteById(call.id)
-        }
+        viewModelScope.launch(Dispatchers.IO) { db.blockedCallDao().deleteById(call.id) }
     }
 
     // ─────────────────────────────────────────────
-    // RÉCENTS
+    // SUPPRESSION RÉCENTS
     // ─────────────────────────────────────────────
     fun removeCallGroup(number: String) {
         viewModelScope.launch(Dispatchers.IO) {
-            val resolver = getApplication<Application>().contentResolver
+            val resolver   = getApplication<Application>().contentResolver
             val normalized = PhoneUtils.normalizeNumber(number)
-
-            resolver.delete(
-                CallLog.Calls.CONTENT_URI,
-                "${CallLog.Calls.NUMBER} = ?",
-                arrayOf(number)
-            )
-
-            if (normalized != number) {
-                resolver.delete(
-                    CallLog.Calls.CONTENT_URI,
-                    "${CallLog.Calls.NUMBER} = ?",
-                    arrayOf(normalized)
-                )
-            }
-
+            resolver.delete(CallLog.Calls.CONTENT_URI, "${CallLog.Calls.NUMBER} = ?", arrayOf(number))
+            if (normalized != number)
+                resolver.delete(CallLog.Calls.CONTENT_URI, "${CallLog.Calls.NUMBER} = ?", arrayOf(normalized))
             withContext(Dispatchers.Main) {
                 _callGroups.value = _callGroups.value.filter { it.number != number }
             }
@@ -303,7 +221,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // ─────────────────────────────────────────────
-    // PARAMÈTRES & CONFIGURATION
+    // PARAMÈTRES — Protection
     // ─────────────────────────────────────────────
     fun setBlockPrivate(block: Boolean) {
         spamDetector.setBlockPrivateNumbers(block)
@@ -315,6 +233,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _hideBlocked.value = hide
     }
 
+    // ─────────────────────────────────────────────
+    // PARAMÈTRES — Horaires
+    // ─────────────────────────────────────────────
     fun setScheduleEnabled(enabled: Boolean) {
         spamDetector.setScheduleEnabled(enabled)
         _scheduleEnabled.value = enabled
@@ -340,11 +261,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _scheduleEndMinute.value = m
     }
 
+    // ─────────────────────────────────────────────
+    // PARAMÈTRES — Ne pas déranger
+    // ─────────────────────────────────────────────
     fun setDoNotDisturb(enabled: Boolean) {
         spamDetector.setDoNotDisturb(enabled)
         _doNotDisturb.value = enabled
     }
 
+    // ─────────────────────────────────────────────
+    // LISTE BLANCHE
+    // ─────────────────────────────────────────────
     fun addToWhitelist(number: String) {
         val normalized = PhoneUtils.normalizeNumber(number)
         spamDetector.addToWhitelist(normalized)
@@ -354,6 +281,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun removeFromWhitelist(number: String) {
         val normalized = PhoneUtils.normalizeNumber(number)
         spamDetector.removeFromWhitelist(normalized)
+        if (_whitelist.value.contains(number)) spamDetector.removeFromWhitelist(number)
         _whitelist.value = spamDetector.getWhitelist()
     }
 
@@ -362,5 +290,22 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             PhoneUtils.normalizeNumber(it.phoneNumber) to it.name
         }
 
+    // ─────────────────────────────────────────────
+    // SUGGESTIONS CLAVIER
+    // ─────────────────────────────────────────────
+    /**
+     * Retourne les contacts dont le numéro contient la saisie en cours.
+     * Utilisé par KeypadScreen pour les suggestions.
+     */
+    fun getSuggestions(input: String): List<Contact> {
+        if (input.length < 3) return emptyList()
+        return _contacts.value
+            .filter { it.phoneNumber.contains(input) }
+            .take(3)
+    }
+
+    // ─────────────────────────────────────────────
+    // TOP SIGNALÉS
+    // ─────────────────────────────────────────────
     suspend fun getTopReported() = reportRepo.getTopReported()
 }
