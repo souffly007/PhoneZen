@@ -20,18 +20,18 @@ enum class Screen(val title: String, val icon: ImageVector) {
 
 @Composable
 fun MainScreen(
-    vm         : MainViewModel,
-    themeVm    : ThemeViewModel,
-    onCall     : (String) -> Unit,
-    onVoicemail: () -> Unit
+    vm            : MainViewModel,
+    themeVm       : ThemeViewModel,
+    onCall        : (String) -> Unit,
+    onCallWithSim : (String, Int) -> Unit = { number, _ -> onCall(number) },
+    onVoicemail   : () -> Unit
 ) {
     val c             = LocalColors.current
     var currentScreen by remember { mutableStateOf(Screen.Keypad) }
-    var showWhitelist    by remember { mutableStateOf(false) }
-    var showTheme        by remember { mutableStateOf(false) }
-    var showTopReported  by remember { mutableStateOf(false) }
+    var showWhitelist   by remember { mutableStateOf(false) }
+    var showTheme       by remember { mutableStateOf(false) }
+    var showTopReported by remember { mutableStateOf(false) }
 
-    // ── Écrans plein écran sans BottomBar ──
     if (showWhitelist) {
         WhitelistScreen(vm = vm, onBack = { showWhitelist = false })
         return
@@ -57,24 +57,19 @@ fun MainScreen(
                         selected = currentScreen == screen,
                         onClick  = { currentScreen = screen },
                         label    = {
-                            Text(
-                                screen.title,
-                                color = if (currentScreen == screen) c.neonOrange else c.textSecond
-                            )
+                            Text(screen.title,
+                                color = if (currentScreen == screen) c.neonOrange else c.textSecond)
                         },
                         icon = {
-                            Icon(
-                                screen.icon,
-                                contentDescription = screen.title,
-                                tint = if (currentScreen == screen) c.neonOrange else c.textSecond
-                            )
+                            Icon(screen.icon, contentDescription = screen.title,
+                                tint = if (currentScreen == screen) c.neonOrange else c.textSecond)
                         },
                         colors = NavigationBarItemDefaults.colors(
-                            indicatorColor          = c.surfaceVar,
-                            selectedIconColor       = c.neonOrange,
-                            unselectedIconColor     = c.textSecond,
-                            selectedTextColor       = c.neonOrange,
-                            unselectedTextColor     = c.textSecond
+                            indicatorColor      = c.surfaceVar,
+                            selectedIconColor   = c.neonOrange,
+                            unselectedIconColor = c.textSecond,
+                            selectedTextColor   = c.neonOrange,
+                            unselectedTextColor = c.textSecond
                         )
                     )
                 }
@@ -83,14 +78,19 @@ fun MainScreen(
     ) { innerPadding ->
         Box(modifier = Modifier.padding(innerPadding)) {
             when (currentScreen) {
-                Screen.Recents   -> RecentsScreen(vm = vm, onCall = onCall)
-                Screen.Keypad    -> KeypadScreen(onCall = onCall, onVoicemail = onVoicemail, vm = vm)
-                Screen.Contacts  -> ContactsScreen(vm = vm, onCall = onCall)
-                Screen.Settings  -> SettingsScreen(
-                    vm                     = vm,
-                    themeVm                = themeVm,
-                    onNavigateToWhitelist  = { showWhitelist = true },
-                    onNavigateToTheme      = { showTheme = true },
+                Screen.Recents  -> RecentsScreen(vm = vm, onCall = onCall)
+                Screen.Keypad   -> KeypadScreen(
+                    onCall        = onCall,
+                    onCallWithSim = onCallWithSim,
+                    onVoicemail   = onVoicemail,
+                    vm            = vm
+                )
+                Screen.Contacts -> ContactsScreen(vm = vm, onCall = onCall)
+                Screen.Settings -> SettingsScreen(
+                    vm                      = vm,
+                    themeVm                 = themeVm,
+                    onNavigateToWhitelist   = { showWhitelist = true },
+                    onNavigateToTheme       = { showTheme = true },
                     onNavigateToTopReported = { showTopReported = true }
                 )
             }

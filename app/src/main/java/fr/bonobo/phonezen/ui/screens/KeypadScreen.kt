@@ -10,6 +10,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Backspace
 import androidx.compose.material.icons.filled.Call
+import androidx.compose.material.icons.filled.SimCard
 import androidx.compose.material.icons.filled.Voicemail
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -26,8 +27,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import fr.bonobo.phonezen.ui.theme.*
-import fr.bonobo.phonezen.util.getCarrierName
-import fr.bonobo.phonezen.util.getVoicemailNumber
+import fr.bonobo.phonezen.util.SimInfo
+import fr.bonobo.phonezen.util.getActiveSims
 import fr.bonobo.phonezen.viewmodel.MainViewModel
 
 data class Key(val main: String, val sub: String = "")
@@ -75,18 +76,46 @@ fun DialKey(
 
 @Composable
 fun KeypadScreen(
-    onCall     : (String) -> Unit,
-    onVoicemail: () -> Unit,
-    vm         : MainViewModel
+    onCall        : (String) -> Unit,
+    onCallWithSim : (String, Int) -> Unit = { n, _ -> onCall(n) },
+    onVoicemail   : () -> Unit,
+    vm            : MainViewModel
 ) {
-    val c               = LocalColors.current
-    val context         = LocalContext.current
-    var number          by remember { mutableStateOf("") }
+    val c       = LocalColors.current
+    val context = LocalContext.current
+    var number  by remember { mutableStateOf("") }
 
-    val voicemailNumber = remember { getVoicemailNumber(context) }
-    val operatorName    = remember { getCarrierName(context) ?: "Messagerie" }
-    val suggestions     = vm.getSuggestions(number)
-    val isUssd          = remember(number) { isUssdCode(number) }
+    val sims      = remember { getActiveSims(context) }
+    val isDualSim = sims.size >= 2
+    val isUssd    = remember(number) { isUssdCode(number) }
+    val suggestions = vm.getSuggestions(number)
+
+    // ── Dialog choix SIM ──
+    var showSimDialog    by remember { mutableStateOf(false) }
+    var pendingNumber    by remember { mutableStateOf("") }
+
+    fun handleCall() {
+        if (number.isEmpty()) return
+        if (isDualSim) {
+            pendingNumber = number
+            showSimDialog = true
+        } else {
+            onCall(number)
+        }
+    }
+
+    // ── Dialog sélection SIM ──
+    if (showSimDialog) {
+        SimSelectionDialog(
+            sims      = sims,
+            number    = pendingNumber,
+            onSelect  = { sim ->
+                showSimDialog = false
+                onCallWithSim(pendingNumber, sim.subscriptionId)
+            },
+            onDismiss = { showSimDialog = false }
+        )
+    }
 
     BoxWithConstraints(
         modifier = Modifier
@@ -94,27 +123,24 @@ fun KeypadScreen(
             .background(c.background)
             .padding(horizontal = 16.dp)
     ) {
-        val screenH = maxHeight
-
-        // ── Calcul adaptatif selon la hauteur disponible ──
+        val screenH  = maxHeight
         val isSmall  = screenH < 600.dp
         val isMedium = screenH < 750.dp
 
-        val keySize      = when { isSmall -> 58.dp;  isMedium -> 66.dp;  else -> 74.dp }
-        val keyFontSize  = when { isSmall -> 22f;    isMedium -> 24f;    else -> 27f   }
-        val fabSize      = when { isSmall -> 60.dp;  isMedium -> 68.dp;  else -> 74.dp }
-        val actionSize   = when { isSmall -> 48.dp;  isMedium -> 52.dp;  else -> 56.dp }
-        val displayH     = when { isSmall -> 50.dp;  isMedium -> 58.dp;  else -> 64.dp }
-        val titleSize    = when { isSmall -> 14f;    isMedium -> 15f;    else -> 16f   }
-        val spacingOuter = when { isSmall -> 4.dp;   isMedium -> 8.dp;   else -> 12.dp }
-        val spacingInner = when { isSmall -> 2.dp;   isMedium -> 4.dp;   else -> 6.dp  }
+        val keySize     = when { isSmall -> 58.dp;  isMedium -> 66.dp;  else -> 74.dp }
+        val keyFontSize = when { isSmall -> 22f;    isMedium -> 24f;    else -> 27f   }
+        val fabSize     = when { isSmall -> 60.dp;  isMedium -> 68.dp;  else -> 74.dp }
+        val actionSize  = when { isSmall -> 48.dp;  isMedium -> 52.dp;  else -> 56.dp }
+        val displayH    = when { isSmall -> 50.dp;  isMedium -> 58.dp;  else -> 64.dp }
+        val titleSize   = when { isSmall -> 14f;    isMedium -> 15f;    else -> 16f   }
+        val spacingIn   = when { isSmall -> 2.dp;   isMedium -> 4.dp;   else -> 6.dp  }
+        val spacingOut  = when { isSmall -> 4.dp;   isMedium -> 8.dp;   else -> 12.dp }
 
         Column(
             modifier            = Modifier.fillMaxSize(),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceEvenly
         ) {
-
             // ── Bloc 1 : Titre + numéro ──
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
@@ -123,7 +149,7 @@ fun KeypadScreen(
                     color      = if (isUssd) c.neonCyan else c.neonOrange,
                     fontWeight = FontWeight.ExtraBold
                 )
-                Spacer(Modifier.height(spacingInner))
+                Spacer(Modifier.height(spacingIn))
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape    = RoundedCornerShape(14.dp),
@@ -146,9 +172,8 @@ fun KeypadScreen(
                         )
                     }
                 }
-                // Suggestions
                 if (suggestions.isNotEmpty()) {
-                    Spacer(Modifier.height(spacingInner))
+                    Spacer(Modifier.height(spacingIn))
                     Row(
                         modifier              = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.Center
@@ -192,14 +217,14 @@ fun KeypadScreen(
                                 onTap       = { number += key.main },
                                 onLongPress = {
                                     if (key.main == "0") number += "+"
-                                    if (key.main == "1") onCall(voicemailNumber)
+                                    if (key.main == "1") sims.firstOrNull()?.let { onCallWithSim(it.voicemail, it.subscriptionId) }
                                 },
-                                size      = keySize,
-                                fontSize  = keyFontSize
+                                size     = keySize,
+                                fontSize = keyFontSize
                             )
                         }
                     }
-                    Spacer(Modifier.height(spacingInner))
+                    Spacer(Modifier.height(spacingIn))
                 }
             }
 
@@ -222,7 +247,7 @@ fun KeypadScreen(
                     }
 
                     FloatingActionButton(
-                        onClick        = { if (number.isNotEmpty()) onCall(number) },
+                        onClick        = { handleCall() },
                         modifier       = Modifier.size(fabSize),
                         containerColor = if (isUssd) c.neonCyan else c.neonGreen,
                         shape          = CircleShape
@@ -241,29 +266,141 @@ fun KeypadScreen(
                     }
                 }
 
-                Spacer(Modifier.height(spacingOuter))
+                Spacer(Modifier.height(spacingOut))
 
-                OutlinedButton(
-                    onClick  = { onCall(voicemailNumber) },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape    = RoundedCornerShape(12.dp),
-                    colors   = ButtonDefaults.outlinedButtonColors(
-                        containerColor = c.surface,
-                        contentColor   = c.textPrimary
-                    )
-                ) {
-                    Icon(Icons.Default.Voicemail, null, tint = c.neonCyan,
-                        modifier = Modifier.size(20.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Column(horizontalAlignment = Alignment.Start) {
-                        Text("MESSAGERIE", fontWeight = FontWeight.Bold,
-                            fontSize = 13.sp, color = c.textPrimary)
-                        Text("$operatorName · $voicemailNumber",
-                            fontSize = 11.sp, color = c.textSecond,
-                            maxLines = 1, overflow = TextOverflow.Ellipsis)
+                // ── Messagerie ──
+                if (isDualSim) {
+                    Row(
+                        modifier              = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        sims.forEach { sim ->
+                            SimVoicemailButton(
+                                sim      = sim,
+                                modifier = Modifier.weight(1f),
+                                onClick  = { onCallWithSim(sim.voicemail, sim.subscriptionId) }
+                            )
+                        }
+                    }
+                } else {
+                    sims.firstOrNull()?.let { sim ->
+                        OutlinedButton(
+                            onClick  = { onCall(sim.voicemail) },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape    = RoundedCornerShape(12.dp),
+                            colors   = ButtonDefaults.outlinedButtonColors(
+                                containerColor = c.surface,
+                                contentColor   = c.textPrimary
+                            )
+                        ) {
+                            Icon(Icons.Default.Voicemail, null, tint = c.neonCyan, modifier = Modifier.size(20.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Column(horizontalAlignment = Alignment.Start) {
+                                Text("MESSAGERIE", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = c.textPrimary)
+                                Text("${sim.carrierName} · ${sim.voicemail}",
+                                    fontSize = 11.sp, color = c.textSecond,
+                                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
+                        }
                     }
                 }
             }
+        }
+    }
+}
+
+// ── Dialog sélection SIM ──
+@Composable
+private fun SimSelectionDialog(
+    sims     : List<SimInfo>,
+    number   : String,
+    onSelect : (SimInfo) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val c = LocalColors.current
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor   = c.surfaceVar,
+        title = {
+            Text("Choisir la SIM", color = c.textPrimary, fontWeight = FontWeight.Bold)
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text     = "Appeler $number avec :",
+                    fontSize = 13.sp,
+                    color    = c.textSecond
+                )
+                sims.forEach { sim ->
+                    val simColor = if (sim.slotIndex == 0) c.neonCyan else c.neonOrange
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onSelect(sim) },
+                        shape    = RoundedCornerShape(12.dp),
+                        colors   = CardDefaults.cardColors(
+                            containerColor = simColor.copy(alpha = 0.1f)
+                        )
+                    ) {
+                        Row(
+                            modifier          = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Default.SimCard,
+                                null,
+                                tint     = simColor,
+                                modifier = Modifier.size(28.dp)
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Column {
+                                Text(
+                                    text       = sim.label,
+                                    fontSize   = 15.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color      = simColor
+                                )
+                                Text(
+                                    text     = sim.carrierName,
+                                    fontSize = 12.sp,
+                                    color    = c.textSecond
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Annuler", color = c.textSecond)
+            }
+        }
+    )
+}
+
+@Composable
+private fun SimVoicemailButton(sim: SimInfo, modifier: Modifier, onClick: () -> Unit) {
+    val c        = LocalColors.current
+    val simColor = if (sim.slotIndex == 0) c.neonCyan else c.neonOrange
+    OutlinedButton(
+        onClick  = onClick,
+        modifier = modifier,
+        shape    = RoundedCornerShape(12.dp),
+        colors   = ButtonDefaults.outlinedButtonColors(
+            containerColor = c.surface,
+            contentColor   = c.textPrimary
+        )
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.Voicemail, null, tint = simColor, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(4.dp))
+                Text(sim.label, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = simColor)
+            }
+            Text(sim.carrierName, fontSize = 10.sp, color = c.textSecond, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(sim.voicemail,   fontSize = 10.sp, color = c.textSecond, maxLines = 1)
         }
     }
 }
