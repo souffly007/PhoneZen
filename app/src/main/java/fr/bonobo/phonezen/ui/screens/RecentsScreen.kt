@@ -500,6 +500,23 @@ fun CallGroupRow(
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(PhoneUtils.formatTimestamp(group.lastCall.timestamp), fontSize = 12.sp, color = c.textSecond)
+                    // Badge SIM si dual SIM
+                    if (group.lastCall.simSlot >= 0) {
+                        Spacer(Modifier.width(4.dp))
+                        Card(
+                            shape  = RoundedCornerShape(4.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (group.lastCall.simSlot == 0) c.neonCyan.copy(alpha = 0.2f) else c.neonOrange.copy(alpha = 0.2f)
+                            )
+                        ) {
+                            Text(
+                                text     = "SIM ${group.lastCall.simSlot + 1}",
+                                fontSize = 9.sp,
+                                color    = if (group.lastCall.simSlot == 0) c.neonCyan else c.neonOrange,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                            )
+                        }
+                    }
                     if (isSuspect) {
                         Spacer(Modifier.width(6.dp))
                         Card(

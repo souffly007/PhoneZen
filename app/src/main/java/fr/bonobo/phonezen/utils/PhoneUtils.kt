@@ -2,6 +2,7 @@ package fr.bonobo.phonezen.utils
 
 import android.content.Context
 import android.net.Uri
+import android.os.Build
 import android.provider.ContactsContract
 import fr.bonobo.phonezen.data.model.Contact
 import fr.bonobo.phonezen.data.model.CallEntry
@@ -51,7 +52,6 @@ object PhoneUtils {
         }
     }
 
-    /** Charge contacts dédupliqués par CONTACT_ID */
     fun loadContacts(context: Context, favoriteIds: Set<String>): List<Contact> {
         val map = linkedMapOf<Long, Contact>()
         val projection = arrayOf(
@@ -79,21 +79,17 @@ object PhoneUtils {
                 val photo = if (photoIdx >= 0) c.getString(photoIdx) else null
                 val key   = groupKey(num)
                 if (!map.containsKey(id) || type == ContactsContract.CommonDataKinds.Phone.TYPE_MOBILE) {
-                    // On convertit le code 'type' (Int) en libellé (String) comme "Mobile" ou "Maison"
                     val label = ContactsContract.CommonDataKinds.Phone.getTypeLabel(
-                        context.resources,
-                        type,
-                        ""
+                        context.resources, type, ""
                     ).toString()
-
                     map[id] = Contact(
                         contactId   = id,
                         name        = name,
                         phoneNumber = num,
                         photoUri    = photo,
                         isFavorite  = favoriteIds.contains(key),
-                        phoneType   = label, // On passe le String ici
-                        callCount   = 0      // On initialise le compteur à 0
+                        phoneType   = label,
+                        callCount   = 0
                     )
                 }
             }
@@ -101,13 +97,13 @@ object PhoneUtils {
         return map.values.toList()
     }
 
-    /** Charge le journal d'appels groupé avec lookup photo temps réel */
     fun loadCallGroups(context: Context, favoriteIds: Set<String>): List<CallGroup> {
         val map      = linkedMapOf<String, MutableList<CallEntry>>()
         val nameMap  = hashMapOf<String, String?>()
         val photoMap = hashMapOf<String, String?>()
 
-        val projection = arrayOf(
+        // ── Colonnes de base ──
+        val baseProjection = mutableListOf(
             CallLog.Calls._ID,
             CallLog.Calls.NUMBER,
             CallLog.Calls.CACHED_NAME,
@@ -117,18 +113,24 @@ object PhoneUtils {
             CallLog.Calls.CACHED_PHOTO_URI
         )
 
+        // ── Colonne SIM slot (Android 5.1+) ──
+        val hasSimSlot = Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1
+        if (hasSimSlot) baseProjection.add(CallLog.Calls.PHONE_ACCOUNT_ID)
+
         context.contentResolver.query(
             CallLog.Calls.CONTENT_URI,
-            projection, null, null,
+            baseProjection.toTypedArray(),
+            null, null,
             "${CallLog.Calls.DATE} DESC"
         )?.use { c ->
-            val idIdx    = c.getColumnIndex(CallLog.Calls._ID)
-            val numIdx   = c.getColumnIndex(CallLog.Calls.NUMBER)
-            val nameIdx  = c.getColumnIndex(CallLog.Calls.CACHED_NAME)
-            val typeIdx  = c.getColumnIndex(CallLog.Calls.TYPE)
-            val durIdx   = c.getColumnIndex(CallLog.Calls.DURATION)
-            val dateIdx  = c.getColumnIndex(CallLog.Calls.DATE)
-            val photoIdx = c.getColumnIndex(CallLog.Calls.CACHED_PHOTO_URI)
+            val idIdx      = c.getColumnIndex(CallLog.Calls._ID)
+            val numIdx     = c.getColumnIndex(CallLog.Calls.NUMBER)
+            val nameIdx    = c.getColumnIndex(CallLog.Calls.CACHED_NAME)
+            val typeIdx    = c.getColumnIndex(CallLog.Calls.TYPE)
+            val durIdx     = c.getColumnIndex(CallLog.Calls.DURATION)
+            val dateIdx    = c.getColumnIndex(CallLog.Calls.DATE)
+            val photoIdx   = c.getColumnIndex(CallLog.Calls.CACHED_PHOTO_URI)
+            val simIdx     = if (hasSimSlot) c.getColumnIndex(CallLog.Calls.PHONE_ACCOUNT_ID) else -1
 
             while (c.moveToNext()) {
                 val num   = c.getString(numIdx) ?: ""
@@ -136,13 +138,25 @@ object PhoneUtils {
                 val name  = if (nameIdx  >= 0) c.getString(nameIdx)  else null
                 val photo = if (photoIdx >= 0) c.getString(photoIdx) else null
 
+                // ── Détection slot SIM depuis PHONE_ACCOUNT_ID ──
+                // Android stocke l'ID du compte téléphonique, souvent "0" ou "1" pour SIM1/SIM2
+                val simSlot = if (simIdx >= 0) {
+                    val accountId = c.getString(simIdx) ?: ""
+                    when {
+                        accountId == "0" || accountId.endsWith("_0") || accountId.contains("sim0") -> 0
+                        accountId == "1" || accountId.endsWith("_1") || accountId.contains("sim1") -> 1
+                        else -> -1
+                    }
+                } else -1
+
                 val entry = CallEntry(
                     id        = if (idIdx >= 0) c.getLong(idIdx) else 0L,
                     number    = num,
                     name      = name,
                     type      = c.getInt(typeIdx),
                     duration  = c.getLong(durIdx),
-                    timestamp = c.getLong(dateIdx)
+                    timestamp = c.getLong(dateIdx),
+                    simSlot   = simSlot
                 )
 
                 map.getOrPut(key) { mutableListOf() }.add(entry)
@@ -152,11 +166,8 @@ object PhoneUtils {
         }
 
         return map.entries.map { (key, entries) ->
-            val number = entries.first().number
-
-            // Si pas de photo dans le cache du journal → lookup temps réel dans les contacts
+            val number       = entries.first().number
             val resolvedPhoto = photoMap[key] ?: lookupContactPhoto(context, number)
-            // Idem pour le nom
             val resolvedName  = nameMap[key]  ?: lookupContactName(context, number)
 
             CallGroup(
@@ -169,20 +180,15 @@ object PhoneUtils {
         }
     }
 
-    /** Lookup photo depuis numéro via PhoneLookup */
     fun lookupContactPhoto(context: Context, number: String?): String? {
         if (number.isNullOrBlank()) return null
         return try {
             val uri = Uri.withAppendedPath(
-                ContactsContract.PhoneLookup.CONTENT_FILTER_URI,
-                Uri.encode(number)
+                ContactsContract.PhoneLookup.CONTENT_FILTER_URI, Uri.encode(number)
             )
             context.contentResolver.query(
                 uri,
-                arrayOf(
-                    ContactsContract.PhoneLookup.CONTACT_ID,
-                    ContactsContract.PhoneLookup.PHOTO_THUMBNAIL_URI
-                ),
+                arrayOf(ContactsContract.PhoneLookup.CONTACT_ID, ContactsContract.PhoneLookup.PHOTO_THUMBNAIL_URI),
                 null, null, null
             )?.use { c ->
                 if (c.moveToFirst()) {
@@ -193,38 +199,29 @@ object PhoneUtils {
         } catch (e: Exception) { null }
     }
 
-    /** Lookup nom depuis numéro - Utilisé pour l'InCall UI */
     fun lookupContactName(context: Context, number: String?): String? {
         if (number.isNullOrBlank()) return null
         return try {
             val uri = Uri.withAppendedPath(
-                ContactsContract.PhoneLookup.CONTENT_FILTER_URI,
-                Uri.encode(number)
+                ContactsContract.PhoneLookup.CONTENT_FILTER_URI, Uri.encode(number)
             )
             context.contentResolver.query(
                 uri,
                 arrayOf(ContactsContract.PhoneLookup.DISPLAY_NAME),
                 null, null, null
-            )?.use { c ->
-                if (c.moveToFirst()) c.getString(0) else null
-            }
+            )?.use { c -> if (c.moveToFirst()) c.getString(0) else null }
         } catch (e: Exception) { null }
     }
 
-    /** Lookup nom + photo en une seule requête — utilisé par InCallScreen */
     fun lookupContact(context: Context, number: String?): Pair<String?, String?> {
         if (number.isNullOrBlank()) return Pair(null, null)
         return try {
             val uri = Uri.withAppendedPath(
-                ContactsContract.PhoneLookup.CONTENT_FILTER_URI,
-                Uri.encode(number)
+                ContactsContract.PhoneLookup.CONTENT_FILTER_URI, Uri.encode(number)
             )
             context.contentResolver.query(
                 uri,
-                arrayOf(
-                    ContactsContract.PhoneLookup.DISPLAY_NAME,
-                    ContactsContract.PhoneLookup.PHOTO_THUMBNAIL_URI
-                ),
+                arrayOf(ContactsContract.PhoneLookup.DISPLAY_NAME, ContactsContract.PhoneLookup.PHOTO_THUMBNAIL_URI),
                 null, null, null
             )?.use { c ->
                 if (c.moveToFirst()) {

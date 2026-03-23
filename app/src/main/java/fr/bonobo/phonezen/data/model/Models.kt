@@ -5,46 +5,45 @@ import androidx.room.PrimaryKey
 
 // ── Entrée journal ──
 data class CallEntry(
-    val id: Long,
-    val number: String,
-    val name: String?,
-    val type: Int,        // CallLog.Calls.TYPE
-    val duration: Long,   // secondes
+    val id       : Long,
+    val number   : String,
+    val name     : String?,
+    val type     : Int,        // CallLog.Calls.TYPE
+    val duration : Long,       // secondes
     val timestamp: Long,
-    val isBlocked: Boolean = false
+    val isBlocked: Boolean = false,
+    val simSlot  : Int = -1    // -1 = inconnu, 0 = SIM1, 1 = SIM2
 )
 
 // ── Groupe d'appels (même numéro) ──
 data class CallGroup(
-    val number: String,
-    val name: String?,
-    val photoUri: String?,
-    val calls: List<CallEntry>,
+    val number    : String,
+    val name      : String?,
+    val photoUri  : String?,
+    val calls     : List<CallEntry>,
     val isFavorite: Boolean = false
 ) {
-    val lastCall: CallEntry get() = calls.first()
-    val callCount: Int get() = calls.size
-    val missedCount: Int get() = calls.count { it.type == android.provider.CallLog.Calls.MISSED_TYPE }
+    val lastCall   : CallEntry get() = calls.first()
+    val callCount  : Int get() = calls.size
+    val missedCount: Int get() = calls.count {
+        it.type == android.provider.CallLog.Calls.MISSED_TYPE && it.duration == 0L
+    }
 }
 
 // ── Room : numéros bloqués manuellement ──
 @Entity(tableName = "blocked_numbers")
 data class BlockedNumber(
-    @PrimaryKey val number: String,
-    val label: String = "",
-    val reason: String = "Manuel",
+    @PrimaryKey val number   : String,
+    val label    : String = "",
+    val reason   : String = "Manuel",
     val timestamp: Long = System.currentTimeMillis()
 )
 
-// RECTIFICATION : CallState et CallStatus ont été SUPPRIMÉS d'ici
-// car ils possèdent maintenant leurs propres fichiers .kt
-// Cela règle les erreurs de "Redeclaration".
-
 // ── Résultat analyse spam ──
 data class SpamResult(
-    val isSpam: Boolean,
+    val isSpam   : Boolean,
     val isPrivate: Boolean = false,
-    val reason: String = "",
+    val reason   : String = "",
     val riskLevel: RiskLevel = RiskLevel.NONE
 )
 
