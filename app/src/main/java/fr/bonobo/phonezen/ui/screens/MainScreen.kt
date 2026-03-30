@@ -32,6 +32,14 @@ fun MainScreen(
     var showTheme       by remember { mutableStateOf(false) }
     var showTopReported by remember { mutableStateOf(false) }
 
+    // ── Si un numéro arrive via intent tel:, on force l'onglet Clavier ──
+    val dialpadNumber by vm.dialpadNumber.collectAsState()
+    LaunchedEffect(dialpadNumber) {
+        if (dialpadNumber.isNotEmpty()) {
+            currentScreen = Screen.Keypad
+        }
+    }
+
     if (showWhitelist) {
         WhitelistScreen(vm = vm, onBack = { showWhitelist = false })
         return

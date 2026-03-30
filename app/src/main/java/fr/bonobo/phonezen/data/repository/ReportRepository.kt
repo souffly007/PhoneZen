@@ -6,6 +6,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 import fr.bonobo.phonezen.data.model.ReportedNumber
 import fr.bonobo.phonezen.utils.PhoneUtils
 import kotlinx.coroutines.tasks.await
+import android.util.Log
 
 /**
  * Repository pour la liste participative des numéros indésirables.
@@ -119,6 +120,7 @@ class ReportRepository {
                 )
             }
         } catch (e: Exception) {
+            Log.e("ReportRepository", "getTopReported FAILED: ${e.javaClass.simpleName} — ${e.message}", e)
             emptyList()
         }
     }

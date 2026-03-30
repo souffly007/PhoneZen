@@ -1,7 +1,7 @@
 {
-  "version": "2026.03.13",
-  "description": "Préfixes ARCEP démarchage + opérateurs spam (Twilio, Qwalikom, Ophony...) fusionnés",
-  "blocked_numbers_count": 14464000,
+  "version": "2026.03.28",
+  "description": "Fusion ARCEP + Opérateurs Spam + Mise à jour Mars 2026",
+  "blocked_numbers_count": 14674000,
   "always_block_prefixes": [
     "089",
     "0644",
@@ -14,6 +14,13 @@
     "0338"
   ],
   "telemarketing_prefixes": [
+    "0159492",
+    "018122",
+    "037650",
+    "07441",
+    "07442",
+    "07572",
+    "097847",
     "015913",
     "015916",
     "015624",
