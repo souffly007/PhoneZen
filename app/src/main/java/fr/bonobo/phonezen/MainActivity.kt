@@ -26,6 +26,8 @@ import androidx.compose.runtime.getValue
 import androidx.core.content.ContextCompat
 import fr.bonobo.phonezen.ui.screens.MainScreen
 import fr.bonobo.phonezen.ui.theme.PhoneZenTheme
+import fr.bonobo.phonezen.utils.ContactCache
+import fr.bonobo.phonezen.utils.PhoneUtils
 import fr.bonobo.phonezen.viewmodel.MainViewModel
 import fr.bonobo.phonezen.viewmodel.ThemeViewModel
 
@@ -73,6 +75,44 @@ class MainActivity : ComponentActivity() {
         }
 
         checkPermissions()
+
+        // Récupère le numéro si lancé depuis un lien tel: (navigateur, site web, etc.)
+        handleDialIntent(intent)
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // GESTION DE L'INTENT tel: (lien depuis navigateur ou autre app)
+    // ══════════════════════════════════════════════════════════════
+
+    /**
+     * Indispensable avec launchMode="singleTask" :
+     * si l'app est déjà ouverte, onCreate n'est pas rappelé,
+     * Android passe par onNewIntent à la place.
+     */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent) // met à jour l'intent courant
+        handleDialIntent(intent)
+    }
+
+    /**
+     * Extrait le numéro d'un intent ACTION_DIAL / ACTION_VIEW avec scheme "tel"
+     * et le pousse vers le ViewModel pour préremplir le dialpad.
+     */
+    private fun handleDialIntent(intent: Intent?) {
+        val number = getNumberFromIntent(intent) ?: return
+        if (number.isBlank()) return
+        Log.d("PhoneZen", "Intent tel: reçu → $number")
+        vm.setDialpadNumber(number)
+    }
+
+    private fun getNumberFromIntent(intent: Intent?): String? {
+        val data = intent?.data
+        return when {
+            data?.scheme == "tel" -> data.schemeSpecificPart
+            intent?.action == Intent.ACTION_DIAL && data != null -> data.schemeSpecificPart
+            else -> null
+        }
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -80,6 +120,8 @@ class MainActivity : ComponentActivity() {
     // ══════════════════════════════════════════════════════════════
     fun launchCall(number: String) {
         try {
+            cacheContactName(number)
+
             val intent = Intent(Intent.ACTION_CALL).apply {
                 data  = Uri.fromParts("tel", number, null)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -89,7 +131,10 @@ class MainActivity : ComponentActivity() {
             startActivity(Intent(Intent.ACTION_DIAL).apply {
                 data = Uri.fromParts("tel", number, null)
             })
-        } catch (e: Exception) { e.printStackTrace() }
+        } catch (e: Exception) {
+            Log.e("PhoneZen", "Erreur appel : ${e.message}")
+            e.printStackTrace()
+        }
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -97,6 +142,8 @@ class MainActivity : ComponentActivity() {
     // ══════════════════════════════════════════════════════════════
     @SuppressLint("MissingPermission")
     fun launchCallWithSim(number: String, subscriptionId: Int) {
+        cacheContactName(number)
+
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M || subscriptionId < 0) {
             launchCall(number)
             return
@@ -114,7 +161,6 @@ class MainActivity : ComponentActivity() {
                 startActivity(intent)
                 Log.d("PhoneZen", "Appel via SIM subscriptionId=$subscriptionId : $number")
             } else {
-                // Fallback si impossible de trouver le PhoneAccountHandle
                 launchCall(number)
             }
         } catch (e: Exception) {
@@ -123,9 +169,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    /**
-     * Récupère le PhoneAccountHandle correspondant à un subscriptionId.
-     */
     @SuppressLint("MissingPermission")
     private fun getPhoneAccountHandle(subscriptionId: Int): PhoneAccountHandle? {
         return try {
@@ -138,7 +181,47 @@ class MainActivity : ComponentActivity() {
                 ) ?: -1
                 subId == subscriptionId
             }
-        } catch (e: Exception) { null }
+        } catch (e: Exception) {
+            Log.e("PhoneZen", "Erreur getPhoneAccountHandle : ${e.message}")
+            null
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // GESTION DU CACHE DES CONTACTS
+    // ══════════════════════════════════════════════════════════════
+    private fun cacheContactName(number: String) {
+        if (ContactCache.get(number) != null) return
+        val name = lookupContactName(number)
+        if (name != null) {
+            ContactCache.put(number, name)
+            Log.d("PhoneZen", "Contact mis en cache: $name → $number")
+        }
+    }
+
+    private fun lookupContactName(number: String): String? {
+        val normalizedNumber = PhoneUtils.normalizeNumber(number)
+        val uri = Uri.withAppendedPath(
+            android.provider.ContactsContract.PhoneLookup.CONTENT_FILTER_URI,
+            Uri.encode(normalizedNumber)
+        )
+        val projection = arrayOf(android.provider.ContactsContract.PhoneLookup.DISPLAY_NAME)
+        val cursor = contentResolver.query(uri, projection, null, null, null)
+        cursor?.use {
+            if (it.moveToFirst()) return it.getString(0)
+        }
+        return null
+    }
+
+    private fun preloadContactCache() {
+        Thread {
+            try {
+                ContactCache.preloadFromContacts(contentResolver)
+                Log.d("PhoneZen", "ContactCache préchargé avec succès")
+            } catch (e: Exception) {
+                Log.e("PhoneZen", "Erreur préchargement cache : ${e.message}")
+            }
+        }.start()
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -164,7 +247,10 @@ class MainActivity : ComponentActivity() {
         return try {
             val tm = getSystemService(Context.TELEPHONY_SERVICE) as TelephonyManager
             tm.voiceMailNumber?.takeIf { it.isNotBlank() && it != "null" }
-        } catch (e: Exception) { null }
+        } catch (e: Exception) {
+            Log.e("PhoneZen", "Erreur getSystemVoicemailNumber : ${e.message}")
+            null
+        }
     }
 
     private fun getCarrierName(): String? {
@@ -172,7 +258,10 @@ class MainActivity : ComponentActivity() {
             val tm = getSystemService(Context.TELEPHONY_SERVICE) as TelephonyManager
             tm.networkOperatorName.takeIf { it.isNotBlank() }
                 ?: tm.simOperatorName.takeIf { it.isNotBlank() }
-        } catch (e: Exception) { null }
+        } catch (e: Exception) {
+            Log.e("PhoneZen", "Erreur getCarrierName : ${e.message}")
+            null
+        }
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -188,6 +277,7 @@ class MainActivity : ComponentActivity() {
 
     private fun proceedAfterPermissions() {
         vm.loadData(this)
+        preloadContactCache()
         checkAndRequestRoles()
     }
 
@@ -208,7 +298,9 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        if (rolesReady()) vm.loadData(this)
+        if (rolesReady()) {
+            vm.loadData(this)
+        }
     }
 
     private fun rolesReady(): Boolean {

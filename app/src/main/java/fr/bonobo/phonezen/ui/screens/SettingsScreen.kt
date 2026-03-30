@@ -1,8 +1,13 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2025-2026 Franck R-F (souffly007)
+// This file is part of PhoneZen.
 package fr.bonobo.phonezen.ui.screens
 
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -20,8 +25,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import fr.bonobo.phonezen.ui.theme.*
+import fr.bonobo.phonezen.utils.BackupManager
 import fr.bonobo.phonezen.viewmodel.MainViewModel
 import fr.bonobo.phonezen.viewmodel.ThemeViewModel
+import kotlinx.coroutines.launch
 
 @Composable
 fun SettingsScreen(
@@ -33,6 +40,7 @@ fun SettingsScreen(
 ) {
     val c                = LocalColors.current
     val ctx              = LocalContext.current
+    val scope            = rememberCoroutineScope()
     val blockPrivate     by vm.blockPrivate.collectAsState()
     val hideBlocked      by vm.hideBlocked.collectAsState()
     val doNotDisturb     by vm.doNotDisturb.collectAsState()
@@ -43,8 +51,29 @@ fun SettingsScreen(
     val scheduleEndM     by vm.scheduleEndMinute.collectAsState()
     val currentTheme     by themeVm.theme.collectAsState()
 
-    var showStartPicker by remember { mutableStateOf(false) }
-    var showEndPicker   by remember { mutableStateOf(false) }
+    var showStartPicker  by remember { mutableStateOf(false) }
+    var showEndPicker    by remember { mutableStateOf(false) }
+
+    // ── Backup/Restore state ──
+    var backupMessage    by remember { mutableStateOf<String?>(null) }
+    var isBackupLoading  by remember { mutableStateOf(false) }
+    var showRestoreConfirm by remember { mutableStateOf(false) }
+    var pendingRestoreUri  by remember { mutableStateOf<Uri?>(null) }
+
+    // Lanceur pour partager le fichier de sauvegarde
+    val shareLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { /* rien à faire après partage */ }
+
+    // Lanceur pour choisir un fichier de restauration
+    val restoreLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri != null) {
+            pendingRestoreUri = uri
+            showRestoreConfirm = true
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -73,7 +102,7 @@ fun SettingsScreen(
         SettingItem(
             icon     = Icons.Default.Block,
             title    = "Filtres anti-spam actifs",
-            subtitle = "prefixes_blocked_fr.json v4.1 (2026-02-25)",
+            subtitle = "prefixes_blocked_fr.json v4.1 (2026-03-28)",
             onClick  = {}
         )
         SettingItem(
@@ -131,6 +160,100 @@ fun SettingsScreen(
             subtitle = "Numéros jamais bloqués, même en mode NePasDéranger",
             onClick  = onNavigateToWhitelist
         )
+
+        // ══════════════════════════════════════════════════════════════
+        // SAUVEGARDE / RESTAURATION
+        // ══════════════════════════════════════════════════════════════
+        SectionHeader("💾 Sauvegarde & Restauration")
+
+        // Message feedback
+        backupMessage?.let { msg ->
+            InfoCard(msg)
+        }
+
+        // Bouton Sauvegarder
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 4.dp),
+            shape  = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(containerColor = c.surfaceVar),
+            onClick = {
+                if (!isBackupLoading) {
+                    isBackupLoading = true
+                    backupMessage = null
+                    scope.launch {
+                        val uri = BackupManager.createBackup(ctx)
+                        isBackupLoading = false
+                        if (uri != null) {
+                            backupMessage = "✅ Sauvegarde créée"
+                            // Ouvre le sélecteur de partage
+                            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                type = "application/json"
+                                putExtra(Intent.EXTRA_STREAM, uri)
+                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            }
+                            shareLauncher.launch(Intent.createChooser(shareIntent, "Partager la sauvegarde"))
+                        } else {
+                            backupMessage = "❌ Erreur lors de la sauvegarde"
+                        }
+                    }
+                }
+            }
+        ) {
+            Row(
+                modifier = Modifier.padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (isBackupLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(22.dp),
+                        color = c.neonCyan,
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Icon(Icons.Default.SaveAlt, null, tint = c.neonCyan, modifier = Modifier.size(22.dp))
+                }
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("Sauvegarder", fontSize = 15.sp, color = c.textPrimary, fontWeight = FontWeight.Medium)
+                    Text(
+                        "Exporte favoris, liste blanche, blocages et paramètres",
+                        fontSize = 12.sp, color = c.textSecond
+                    )
+                }
+                Icon(Icons.Default.ChevronRight, null, tint = c.textSecond)
+            }
+        }
+
+        // Bouton Restaurer
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 4.dp),
+            shape  = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(containerColor = c.surfaceVar),
+            onClick = {
+                backupMessage = null
+                restoreLauncher.launch("application/json")
+            }
+        ) {
+            Row(
+                modifier = Modifier.padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Default.RestorePage, null, tint = c.neonOrange, modifier = Modifier.size(22.dp))
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("Restaurer", fontSize = 15.sp, color = c.textPrimary, fontWeight = FontWeight.Medium)
+                    Text(
+                        "Importe une sauvegarde PhoneZen existante",
+                        fontSize = 12.sp, color = c.textSecond
+                    )
+                }
+                Icon(Icons.Default.ChevronRight, null, tint = c.textSecond)
+            }
+        }
 
         SectionHeader("🎨 Apparence")
 
@@ -211,6 +334,7 @@ fun SettingsScreen(
         Spacer(Modifier.height(32.dp))
     }
 
+    // ── Dialogs ──
     if (showStartPicker) {
         TimePickerDialog(
             initialHour   = scheduleStartH,
@@ -227,7 +351,59 @@ fun SettingsScreen(
             onDismiss     = { showEndPicker = false }
         )
     }
+
+    // ── Confirmation avant restauration ──
+    if (showRestoreConfirm) {
+        val c = LocalColors.current
+        AlertDialog(
+            onDismissRequest = { showRestoreConfirm = false },
+            containerColor   = c.surfaceVar,
+            title = {
+                Text("Restaurer la sauvegarde ?", color = c.textPrimary, fontWeight = FontWeight.Bold)
+            },
+            text = {
+                Text(
+                    "Cette action remplacera vos favoris, liste blanche, numéros bloqués et paramètres actuels.",
+                    color = c.textSecond, fontSize = 14.sp
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showRestoreConfirm = false
+                    val uri = pendingRestoreUri ?: return@TextButton
+                    scope.launch {
+                        val result = BackupManager.restoreBackup(ctx, uri)
+                        backupMessage = when (result) {
+                            is BackupManager.RestoreResult.Success ->
+                                "✅ Restauration réussie — redémarrez l'app"
+                            is BackupManager.RestoreResult.Error   ->
+                                "❌ ${result.message}"
+                        }
+                        // Recharge les données dans le ViewModel
+                        if (result is BackupManager.RestoreResult.Success) {
+                            vm.forceReload(ctx)
+                        }
+                        pendingRestoreUri = null
+                    }
+                }) {
+                    Text("Restaurer", color = c.neonOrange, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showRestoreConfirm = false
+                    pendingRestoreUri  = null
+                }) {
+                    Text("Annuler", color = c.textSecond)
+                }
+            }
+        )
+    }
 }
+
+// ══════════════════════════════════════════════════════════════
+// COMPOSANTS PRIVÉS (inchangés)
+// ══════════════════════════════════════════════════════════════
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

@@ -13,10 +13,10 @@ android {
 
     defaultConfig {
         applicationId = "fr.bonobo.phonezen"
-        minSdk        = 26
+        minSdk        = 24
         targetSdk     = 35 // Passe-le à 35 aussi pour être cohérent avec le compileSdk
         versionCode   = 1
-        versionName   = "1.3"
+        versionName   = "1.3b"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
