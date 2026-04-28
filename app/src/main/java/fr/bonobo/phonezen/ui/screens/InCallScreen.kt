@@ -35,9 +35,9 @@ import kotlinx.coroutines.withContext
 
 @Composable
 fun InCallScreen(vm: InCallViewModel, onFinish: () -> Unit) {
-    val state   by vm.state.collectAsState()
-    val context  = LocalContext.current
-    var showDialpad by remember { mutableStateOf(false) }
+    val state        by vm.state.collectAsState()
+    val context       = LocalContext.current
+    var showDialpad  by remember { mutableStateOf(false) }
 
     val bgColor   = Color(0xFF0F172A)
     val neonCyan  = Color(0xFF38BDF8)
@@ -58,15 +58,14 @@ fun InCallScreen(vm: InCallViewModel, onFinish: () -> Unit) {
         }
     }
 
-    // Nom affiché : contactName du state en priorité, puis lookup, puis numéro
     val displayName = state.contactName?.takeIf { it.isNotBlank() }
         ?: resolvedName
         ?: state.number.ifEmpty { "Inconnu" }
 
     val infiniteTransition = rememberInfiniteTransition(label = "pulse")
     val pulseScale by infiniteTransition.animateFloat(
-        initialValue = 1f,
-        targetValue  = 1.12f,
+        initialValue  = 1f,
+        targetValue   = 1.12f,
         animationSpec = infiniteRepeatable(
             animation  = tween(1000, easing = LinearEasing),
             repeatMode = RepeatMode.Reverse
@@ -92,7 +91,7 @@ fun InCallScreen(vm: InCallViewModel, onFinish: () -> Unit) {
         ) {
             Spacer(Modifier.height(80.dp))
 
-            // ── Avatar : photo du contact ou icône générique avec pulse ──
+            // ── Avatar ──
             Box(contentAlignment = Alignment.Center) {
                 if (state.status == CallStatus.RINGING || state.status == CallStatus.ACTIVE) {
                     Box(
@@ -107,7 +106,6 @@ fun InCallScreen(vm: InCallViewModel, onFinish: () -> Unit) {
                 }
 
                 if (!resolvedPhoto.isNullOrBlank()) {
-                    // Photo du contact
                     AsyncImage(
                         model = ImageRequest.Builder(context)
                             .data(resolvedPhoto)
@@ -115,12 +113,9 @@ fun InCallScreen(vm: InCallViewModel, onFinish: () -> Unit) {
                             .build(),
                         contentDescription = displayName,
                         contentScale       = ContentScale.Crop,
-                        modifier           = Modifier
-                            .size(100.dp)
-                            .clip(CircleShape)
+                        modifier           = Modifier.size(100.dp).clip(CircleShape)
                     )
                 } else {
-                    // Fallback initiale
                     Surface(
                         modifier = Modifier.size(100.dp),
                         shape    = CircleShape,
@@ -133,7 +128,6 @@ fun InCallScreen(vm: InCallViewModel, onFinish: () -> Unit) {
                         Box(contentAlignment = Alignment.Center) {
                             val initial = displayName.firstOrNull()?.uppercase()
                             if (initial != null && initial != "I") {
-                                // "I" = "Inconnu", on garde l'icône dans ce cas
                                 Text(initial, fontSize = 40.sp, fontWeight = FontWeight.Bold, color = Color.White)
                             } else {
                                 Icon(
@@ -150,15 +144,8 @@ fun InCallScreen(vm: InCallViewModel, onFinish: () -> Unit) {
 
             Spacer(Modifier.height(24.dp))
 
-            // ── Nom du contact (résolu) ──
-            Text(
-                text       = displayName,
-                fontSize   = 32.sp,
-                fontWeight = FontWeight.Bold,
-                color      = Color.White
-            )
+            Text(text = displayName, fontSize = 32.sp, fontWeight = FontWeight.Bold, color = Color.White)
 
-            // ── Numéro sous le nom si on a un nom ──
             if (resolvedName != null && state.number.isNotBlank()) {
                 Text(
                     text     = state.number,
@@ -190,14 +177,47 @@ fun InCallScreen(vm: InCallViewModel, onFinish: () -> Unit) {
                         columns               = GridCells.Fixed(3),
                         modifier              = Modifier.fillMaxWidth().padding(bottom = 40.dp),
                         horizontalArrangement = Arrangement.spacedBy(16.dp),
-                        verticalArrangement   = Arrangement.spacedBy(24.dp)
+                        verticalArrangement   = Arrangement.spacedBy(24.dp),
+                        // FIX: hauteur fixe pour éviter que LazyVerticalGrid ne mesure infiniment
+                        userScrollEnabled     = false
                     ) {
-                        item { ControlCircleBtn(Icons.Default.MicOff,   "Muet",    state.isMuted)   { vm.toggleMute() } }
-                        item { ControlCircleBtn(Icons.Default.Dialpad,  "Clavier", false)            { showDialpad = true } }
-                        item { ControlCircleBtn(Icons.Default.VolumeUp, "HP",      state.isSpeaker) { vm.toggleSpeaker() } }
-                        item { ControlCircleBtn(Icons.Default.Pause,    "Attente", state.isOnHold)  { vm.toggleHold() } }
-                        item { ControlCircleBtn(Icons.Default.Add,      "Ajouter", false)            { } }
-                        item { ControlCircleBtn(Icons.Default.Videocam, "Vidéo",   false)            { } }
+                        item {
+                            ControlCircleBtn(
+                                icon      = if (state.isMuted) Icons.Default.MicOff else Icons.Default.Mic,
+                                label     = if (state.isMuted) "Micro off" else "Muet",
+                                isToggled = state.isMuted,
+                                activeColor = neonCyan
+                            ) { vm.toggleMute() }
+                        }
+                        item {
+                            ControlCircleBtn(
+                                icon  = Icons.Default.Dialpad,
+                                label = "Clavier"
+                            ) { showDialpad = true }
+                        }
+                        item {
+                            ControlCircleBtn(
+                                icon      = if (state.isSpeaker) Icons.Default.VolumeUp else Icons.Default.VolumeDown,
+                                label     = "Haut-parleur",
+                                isToggled = state.isSpeaker,
+                                activeColor = neonGreen
+                            ) {
+                                vm.toggleSpeaker()
+                            }
+                        }
+                        item {
+                            ControlCircleBtn(
+                                icon      = Icons.Default.Pause,
+                                label     = "Attente",
+                                isToggled = state.isOnHold
+                            ) { vm.toggleHold() }
+                        }
+                        item {
+                            ControlCircleBtn(icon = Icons.Default.Add, label = "Ajouter") {}
+                        }
+                        item {
+                            ControlCircleBtn(icon = Icons.Default.Videocam, label = "Vidéo") {}
+                        }
                     }
                 } else {
                     DtmfKeypad(
@@ -216,7 +236,6 @@ fun InCallScreen(vm: InCallViewModel, onFinish: () -> Unit) {
                     Icon(Icons.Default.CallEnd, null, tint = Color.White, modifier = Modifier.size(32.dp))
                 }
 
-                // ── Appel entrant ──
             } else if (state.status == CallStatus.RINGING) {
                 Row(
                     modifier              = Modifier.fillMaxWidth().padding(bottom = 80.dp),
@@ -246,12 +265,16 @@ fun InCallScreen(vm: InCallViewModel, onFinish: () -> Unit) {
     }
 }
 
+// ─────────────────────────────────────────────
+// BOUTON CONTRÔLE — FIX couleur active configurable
+// ─────────────────────────────────────────────
 @Composable
 fun ControlCircleBtn(
-    icon: ImageVector,
-    label: String,
-    isToggled: Boolean = false,
-    onClick: () -> Unit
+    icon        : ImageVector,
+    label       : String,
+    isToggled   : Boolean = false,
+    activeColor : Color   = Color.White,
+    onClick     : () -> Unit
 ) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -261,14 +284,24 @@ fun ControlCircleBtn(
             modifier = Modifier
                 .size(64.dp)
                 .background(
-                    if (isToggled) Color.White else Color.White.copy(alpha = 0.1f),
+                    if (isToggled) activeColor else Color.White.copy(alpha = 0.1f),
                     CircleShape
                 ),
             contentAlignment = Alignment.Center
         ) {
-            Icon(icon, contentDescription = null, tint = if (isToggled) Color.Black else Color.White)
+            Icon(
+                icon,
+                contentDescription = label,
+                tint = if (isToggled) Color.Black else Color.White,
+                modifier = Modifier.size(26.dp)
+            )
         }
-        Text(text = label, color = Color.White, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
+        Text(
+            text     = label,
+            color    = if (isToggled) activeColor else Color.White,
+            fontSize = 12.sp,
+            modifier = Modifier.padding(top = 8.dp)
+        )
     }
 }
 

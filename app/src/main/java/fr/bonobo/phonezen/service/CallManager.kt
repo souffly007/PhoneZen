@@ -20,106 +20,275 @@ import fr.bonobo.phonezen.data.model.CallStatus
 
 object CallManager {
 
-    private var currentCall: Call? = null
+    private const val TAG = "CallManager"
+
+    // -----------------------------------------------------------------------
+    // Map multi-appels  (remplace l'ancien currentCall unique)
+    //
+    // Clé = identité stable de l'objet Call (callId ou identityHashCode en
+    // fallback). La map contient tous les appels non-déconnectés.
+    // -----------------------------------------------------------------------
+    private val calls = mutableMapOf<String, Call>()
+
     private var inCallService: InCallService? = null
     private val handler = Handler(Looper.getMainLooper())
 
-    // Générateur de sons pour le retour audio local
     private val toneGenerator = ToneGenerator(AudioManager.STREAM_DTMF, 80)
 
-    private val listeners = mutableListOf<(Call?, CallStatus) -> Unit>()
+    private val listeners      = mutableListOf<(Call?, CallStatus) -> Unit>()
     private val audioListeners = mutableListOf<(Boolean, Boolean, Int) -> Unit>()
 
-    private var isMuted: Boolean = false
-    private var isOnHold: Boolean = false
-    private var audioRoute: Int = CallAudioState.ROUTE_EARPIECE
+    private var isMuted    : Boolean = false
+    private var isOnHold   : Boolean = false
+    private var audioRoute : Int     = CallAudioState.ROUTE_EARPIECE
+
+    private var lastToggleTime = 0L
+
+    // -----------------------------------------------------------------------
+    // Résolution de l'appel « courant »
+    //
+    // Priorité : ACTIVE > HOLDING > DIALING/CONNECTING > RINGING
+    // C'est toujours sur cet appel que les actions (hangUp, hold…) s'exercent.
+    // -----------------------------------------------------------------------
+    private fun resolveCurrentCall(): Call? =
+        calls.values.firstOrNull { it.state == Call.STATE_ACTIVE }
+            ?: calls.values.firstOrNull { it.state == Call.STATE_HOLDING }
+            ?: calls.values.firstOrNull {
+                it.state == Call.STATE_DIALING || it.state == Call.STATE_CONNECTING
+            }
+            ?: calls.values.firstOrNull { it.state == Call.STATE_RINGING }
+
+    private fun callKey(call: Call): String =
+        System.identityHashCode(call).toString()
+
+    // -----------------------------------------------------------------------
+    // API publique — enregistrement / service
+    // -----------------------------------------------------------------------
 
     @Synchronized
     fun setInCallService(service: InCallService?) {
-        this.inCallService = service
+        inCallService = service
+        Log.d(TAG, "setInCallService: ${if (service != null) "défini" else "null"}")
     }
 
     @Synchronized
     fun setCall(call: Call) {
-        currentCall = call
-        isOnHold = call.state == Call.STATE_HOLDING
-        notify(call, fromState(call.state))
+        val key = callKey(call)
+        calls[key] = call
+        refreshHoldState()
+        notify(resolveCurrentCall(), fromState(call.state))
         notifyAudio()
+        Log.d(TAG, "setCall [$key] état=${call.state} — map size=${calls.size}")
     }
 
     @Synchronized
     fun onStateChanged(call: Call, state: Int) {
-        isOnHold = state == Call.STATE_HOLDING
-        notify(call, fromState(state))
+        val key = callKey(call)
+
+        if (state == Call.STATE_DISCONNECTED || state == Call.STATE_DISCONNECTING) {
+            calls.remove(key)
+            Log.d(TAG, "onStateChanged [$key] DISCONNECTED — map size=${calls.size}")
+        } else {
+            calls[key] = call
+            Log.d(TAG, "onStateChanged [$key] state=$state — map size=${calls.size}")
+        }
+
+        refreshHoldState()
+
+        val current        = resolveCurrentCall()
+        val reportedStatus = current?.let { fromState(it.state) } ?: CallStatus.DISCONNECTED
+        notify(current, reportedStatus)
         notifyAudio()
     }
 
     @Synchronized
     fun onAudioStateChanged(state: CallAudioState?) {
         if (state != null) {
-            isMuted = state.isMuted
+            isMuted    = state.isMuted
             audioRoute = state.route
+            Log.d(TAG, "onAudioStateChanged: isMuted=$isMuted, route=$audioRoute")
             notifyAudio()
         }
     }
 
+    /**
+     * Appelé uniquement quand getCallCount() == 0 (dernier appel raccroché).
+     * Remet tout à zéro proprement.
+     */
     @Synchronized
     fun clear() {
-        currentCall = null
+        if (calls.isNotEmpty()) {
+            Log.w(TAG, "clear() appelé alors que la map n'est pas vide (${calls.size} appels) — ignoré")
+            return
+        }
         inCallService = null
-        isMuted = false
-        isOnHold = false
-        audioRoute = CallAudioState.ROUTE_EARPIECE
+        isMuted       = false
+        isOnHold      = false
+        audioRoute    = CallAudioState.ROUTE_EARPIECE
         notify(null, CallStatus.DISCONNECTED)
         notifyAudio()
+        Log.d(TAG, "clear: tout réinitialisé")
     }
 
-    fun getCall(): Call? = currentCall
+    /**
+     * FIX reconnexion après kill de l'app.
+     *
+     * Quand l'app est killée pendant un appel, calls est vide au redémarrage.
+     * Android NE rappelle PAS onCallAdded car InCallService est toujours actif
+     * côté système. Cette méthode est appelée depuis InCallActivity.onResume()
+     * ou PhoneZenInCallService.onRebind().
+     *
+     * @return true si au moins un appel a été récupéré
+     */
+    @Synchronized
+    fun reconnectIfNeeded(): Boolean {
+        if (calls.isNotEmpty()) {
+            Log.d(TAG, "reconnectIfNeeded : map non vide, rien à faire")
+            return false
+        }
 
+        val service = inCallService ?: run {
+            Log.w(TAG, "reconnectIfNeeded : inCallService null — onRebind prendra le relais")
+            return false
+        }
+
+        val activeCalls = service.calls.filter {
+            it.state != Call.STATE_DISCONNECTED && it.state != Call.STATE_DISCONNECTING
+        }
+
+        if (activeCalls.isEmpty()) {
+            Log.d(TAG, "reconnectIfNeeded : aucun appel actif dans le service")
+            return false
+        }
+
+        activeCalls.forEach { call ->
+            val key = callKey(call)
+            calls[key] = call
+            Log.d(TAG, "reconnectIfNeeded : appel récupéré [$key] état=${call.state}")
+        }
+
+        refreshHoldState()
+        resolveCurrentCall()?.let { notify(it, fromState(it.state)) }
+        notifyAudio()
+        return true
+    }
+
+    // -----------------------------------------------------------------------
+    // Getters
+    // -----------------------------------------------------------------------
+
+    /** Retourne toujours l'appel résolu dynamiquement. */
+    fun getCall(): Call?                 = resolveCurrentCall()
     fun getAudioState(): CallAudioState? = inCallService?.callAudioState
+
+    /** Nombre d'appels simultanés — utilisé par PhoneZenInCallService. */
+    fun getCallCount(): Int = calls.size
+
+    // -----------------------------------------------------------------------
+    // Listeners
+    // -----------------------------------------------------------------------
 
     fun addListener(l: (Call?, CallStatus) -> Unit) {
         if (!listeners.contains(l)) listeners.add(l)
     }
-
-    fun removeListener(l: (Call?, CallStatus) -> Unit) {
-        listeners.remove(l)
-    }
+    fun removeListener(l: (Call?, CallStatus) -> Unit) = listeners.remove(l)
 
     fun addAudioListener(l: (Boolean, Boolean, Int) -> Unit) {
         if (!audioListeners.contains(l)) audioListeners.add(l)
         l(isMuted, isOnHold, audioRoute)
     }
+    fun removeAudioListener(l: (Boolean, Boolean, Int) -> Unit) = audioListeners.remove(l)
 
-    fun removeAudioListener(l: (Boolean, Boolean, Int) -> Unit) {
-        audioListeners.remove(l)
+    // -----------------------------------------------------------------------
+    // Actions — toujours sur resolveCurrentCall()
+    // -----------------------------------------------------------------------
+
+    fun answer() = resolveCurrentCall()?.answer(VideoProfile.STATE_AUDIO_ONLY)
+    fun reject() = resolveCurrentCall()?.reject(false, null)
+
+    /**
+     * Raccroche l'appel courant résolu dynamiquement.
+     * Si ACTIVE → le raccroche.
+     * Si HOLDING (1er appel revenu de hold après call-waiting) → le raccroche.
+     * Fallback sur inCallService.calls si la map est vide (race condition).
+     */
+    fun hangUp() {
+        val call = resolveCurrentCall()
+        if (call != null) {
+            Log.d(TAG, "hangUp: disconnect via resolveCurrentCall état=${call.state}")
+            try { call.disconnect() } catch (e: Exception) {
+                Log.e(TAG, "hangUp error: ${e.message}")
+            }
+        } else {
+            Log.w(TAG, "hangUp: map vide — tentative via inCallService")
+            val service = inCallService
+            if (service != null) {
+                try {
+                    service.calls.forEach { c ->
+                        if (c.state != Call.STATE_DISCONNECTED &&
+                            c.state != Call.STATE_DISCONNECTING) {
+                            c.disconnect()
+                            Log.d(TAG, "hangUp fallback: disconnect état=${c.state}")
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "hangUp fallback error: ${e.message}")
+                }
+            } else {
+                Log.e(TAG, "hangUp: impossible — map ET inCallService sont null")
+                // Force un clear pour débloquer l'UI dans tous les cas
+                calls.clear()
+                notify(null, CallStatus.DISCONNECTED)
+                notifyAudio()
+            }
+        }
     }
 
-    fun answer() = currentCall?.answer(VideoProfile.STATE_AUDIO_ONLY)
-    fun reject() = currentCall?.reject(false, null)
-    fun hangUp() = currentCall?.disconnect()
-
     fun hold(on: Boolean) {
-        if (on) currentCall?.hold() else currentCall?.unhold()
+        if (on) resolveCurrentCall()?.hold() else resolveCurrentCall()?.unhold()
     }
 
     fun toggleMute() {
         val nextMute = !isMuted
         inCallService?.setMuted(nextMute)
+        Log.d(TAG, "toggleMute: $nextMute")
     }
 
     fun toggleSpeaker() {
+        val now = System.currentTimeMillis()
+        if (now - lastToggleTime < 500) {
+            Log.d(TAG, "toggleSpeaker ignoré (trop rapide)")
+            return
+        }
+        lastToggleTime = now
+
+        val service = inCallService ?: run {
+            Log.e(TAG, "toggleSpeaker: inCallService null")
+            return
+        }
+        if (getAudioState() == null) {
+            Log.e(TAG, "toggleSpeaker: audioState null")
+            return
+        }
+
         val newRoute = if (audioRoute == CallAudioState.ROUTE_SPEAKER) {
+            Log.d(TAG, "toggleSpeaker: → écouteur")
             CallAudioState.ROUTE_EARPIECE
         } else {
+            Log.d(TAG, "toggleSpeaker: → haut-parleur")
             CallAudioState.ROUTE_SPEAKER
         }
-        inCallService?.setAudioRoute(newRoute)
+
+        service.setAudioRoute(newRoute)
+        audioRoute = newRoute
+        notifyAudio()
     }
 
-    // --- GESTION DU CLAVIER (DTMF) ---
+    // -----------------------------------------------------------------------
+    // DTMF
+    // -----------------------------------------------------------------------
+
     fun playDtmf(c: Char) {
-        // Son local (Bip dans le haut-parleur)
         val toneType = when (c) {
             '1' -> ToneGenerator.TONE_DTMF_1
             '2' -> ToneGenerator.TONE_DTMF_2
@@ -136,34 +305,40 @@ object CallManager {
             else -> return
         }
         toneGenerator.startTone(toneType, 150)
-
-        // Signal réseau (pour le répondeur)
-        currentCall?.let { call ->
+        resolveCurrentCall()?.let { call ->
             call.playDtmfTone(c)
             handler.postDelayed({ call.stopDtmfTone() }, 200)
         }
     }
 
-    // Ajouté pour InCallViewModel
-    fun stopDtmf() {
-        currentCall?.stopDtmfTone()
+    fun stopDtmf() = resolveCurrentCall()?.stopDtmfTone()
+
+    // -----------------------------------------------------------------------
+    // Privé
+    // -----------------------------------------------------------------------
+
+    /**
+     * isOnHold = vrai si aucun appel n'est ACTIVE mais au moins un est HOLDING.
+     * Recalculé à chaque changement d'état.
+     */
+    private fun refreshHoldState() {
+        isOnHold = calls.values.none { it.state == Call.STATE_ACTIVE } &&
+                calls.values.any  { it.state == Call.STATE_HOLDING }
     }
 
-    private fun notify(call: Call?, status: CallStatus) {
+    private fun notify(call: Call?, status: CallStatus) =
         listeners.forEach { it(call, status) }
-    }
 
-    private fun notifyAudio() {
+    private fun notifyAudio() =
         audioListeners.forEach { it(isMuted, isOnHold, audioRoute) }
-    }
 
     fun fromState(state: Int): CallStatus = when (state) {
-        Call.STATE_RINGING -> CallStatus.RINGING
-        Call.STATE_DIALING,
-        Call.STATE_CONNECTING -> CallStatus.DIALING
-        Call.STATE_ACTIVE -> CallStatus.ACTIVE
-        Call.STATE_HOLDING -> CallStatus.ON_HOLD
-        Call.STATE_DISCONNECTED -> CallStatus.DISCONNECTED
-        else -> CallStatus.IDLE
+        Call.STATE_RINGING                        -> CallStatus.RINGING
+        Call.STATE_DIALING, Call.STATE_CONNECTING -> CallStatus.DIALING
+        Call.STATE_ACTIVE                         -> CallStatus.ACTIVE
+        Call.STATE_HOLDING                        -> CallStatus.ON_HOLD
+        Call.STATE_DISCONNECTED,
+        Call.STATE_DISCONNECTING                  -> CallStatus.DISCONNECTED
+        else                                      -> CallStatus.IDLE
     }
 }

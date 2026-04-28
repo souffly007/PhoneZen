@@ -1,6 +1,7 @@
 package fr.bonobo.phonezen.data.model
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
 // ── Entrée journal ──
@@ -31,11 +32,14 @@ data class CallGroup(
 }
 
 // ── Room : numéros bloqués manuellement ──
-@Entity(tableName = "blocked_numbers")
+@Entity(
+    tableName = "blocked_numbers",
+    indices = [Index(value = ["number"], unique = true)]
+)
 data class BlockedNumber(
-    @PrimaryKey val number   : String,
-    val label    : String = "",
-    val reason   : String = "Manuel",
+    @PrimaryKey(autoGenerate = true) val id: Int = 0,
+    val number: String,
+    val label: String = "",
     val timestamp: Long = System.currentTimeMillis()
 )
 

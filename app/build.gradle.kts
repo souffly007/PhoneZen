@@ -1,10 +1,13 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
-    id("org.jetbrains.kotlin.android") version "2.1.10" // Assure-toi que la version est là
-    id("com.google.devtools.ksp") version "2.1.10-1.0.29" // Version alignée sur Kotlin
+    id("org.jetbrains.kotlin.android") version "2.1.10"
+    id("com.google.devtools.ksp") version "2.1.10-1.0.29"
     id("com.google.gms.google-services")
     id("com.google.firebase.crashlytics")
-    id("org.jetbrains.kotlin.plugin.compose") version "2.1.10" // Nouveau plugin obligatoire
+    id("org.jetbrains.kotlin.plugin.compose") version "2.1.10"
+    id("org.jetbrains.kotlin.plugin.serialization") version "2.1.10"
 }
 
 android {
@@ -14,11 +17,21 @@ android {
     defaultConfig {
         applicationId = "fr.bonobo.phonezen"
         minSdk        = 24
-        targetSdk     = 35 // Passe-le à 35 aussi pour être cohérent avec le compileSdk
+        targetSdk     = 35
         versionCode   = 1
-        versionName   = "1.3b"
+        versionName   = "1.4b"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // ── Supabase : lecture depuis local.properties ──
+        val localProperties = Properties()
+        val localPropertiesFile = rootProject.file("local.properties")
+        if (localPropertiesFile.exists()) {
+            localProperties.load(localPropertiesFile.inputStream())
+        }
+
+        buildConfigField("String", "SUPABASE_URL", "\"${localProperties.getProperty("supabase_url", "")}\"")
+        buildConfigField("String", "SUPABASE_ANON_KEY", "\"${localProperties.getProperty("supabase_anon_key", "")}\"")
     }
 
     buildTypes {
@@ -33,21 +46,27 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    // Version recommandée pour Kotlin 2.x
     kotlin {
         jvmToolchain(17)
     }
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
 dependencies {
     // ── Firebase ──
     implementation(platform("com.google.firebase:firebase-bom:33.0.0"))
-    implementation("com.google.firebase:firebase-firestore-ktx")
+    // implementation("com.google.firebase:firebase-firestore-ktx")  // RETIRÉ
     implementation("com.google.firebase:firebase-crashlytics")
+
+    // ── Ktor (remplace Firestore) ──
+    implementation("io.ktor:ktor-client-android:2.3.7")
+    implementation("io.ktor:ktor-client-content-negotiation:2.3.7")
+    implementation("io.ktor:ktor-serialization-kotlinx-json:2.3.7")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
 
     val composeBom = platform("androidx.compose:compose-bom:2025.03.00")
     implementation(composeBom)
@@ -78,13 +97,10 @@ dependencies {
 
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
-
+    implementation("androidx.work:work-runtime-ktx:2.9.0")
     implementation("androidx.compose.foundation:foundation:1.10.5")
     implementation("androidx.compose.material3:material3:1.4.0")
     implementation("androidx.graphics:graphics-path:1.1.0-rc01")
-
-    // JSON
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.2")
 
     implementation("io.coil-kt:coil-compose:2.6.0")
 

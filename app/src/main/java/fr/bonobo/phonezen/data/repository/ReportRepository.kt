@@ -1,130 +1,185 @@
 package fr.bonobo.phonezen.data.repository
 
-import com.google.firebase.Timestamp
-import com.google.firebase.firestore.FieldValue
-import com.google.firebase.firestore.FirebaseFirestore
+import android.util.Log
+import fr.bonobo.phonezen.BuildConfig
 import fr.bonobo.phonezen.data.model.ReportedNumber
 import fr.bonobo.phonezen.utils.PhoneUtils
-import kotlinx.coroutines.tasks.await
-import android.util.Log
+import io.ktor.client.*
+import io.ktor.client.engine.android.*
+import io.ktor.client.plugins.contentnegotiation.*
+import io.ktor.client.request.*
+import io.ktor.client.statement.*
+import io.ktor.serialization.kotlinx.json.*
+import kotlinx.serialization.json.Json
+import java.time.Instant
+import java.time.format.DateTimeFormatter
 
 /**
  * Repository pour la liste participative des numéros indésirables.
- * Toutes les opérations sont suspending (appelables depuis une coroutine).
+ * Backend : Supabase (PostgreSQL REST API).
+ * Compatible F-Droid — aucune dépendance Google/Firebase.
  */
 class ReportRepository {
 
-    private val db         = FirebaseFirestore.getInstance()
-    private val collection = db.collection(ReportedNumber.COLLECTION)
+    private val supabaseUrl = BuildConfig.SUPABASE_URL
+    private val supabaseKey = BuildConfig.SUPABASE_ANON_KEY
+    private val tableUrl    = "$supabaseUrl/rest/v1/${ReportedNumber.TABLE}"
 
-    // ── Cache local pour éviter trop d'appels Firestore ──
+    private val client = HttpClient(Android) {
+        install(ContentNegotiation) {
+            json(Json { ignoreUnknownKeys = true; isLenient = true })
+        }
+    }
+
     private val cache = mutableMapOf<String, ReportedNumber?>()
+
+    private fun HttpRequestBuilder.supabaseHeaders() {
+        header("apikey",        supabaseKey)
+        header("Authorization", "Bearer $supabaseKey")
+        header("Content-Type",  "application/json")
+    }
+
+    private fun nowIso(): String =
+        DateTimeFormatter.ISO_INSTANT.format(Instant.now())
+
+    /**
+     * Calcul dynamique du TTL selon le nombre de signalements :
+     *   10–19  → 30 jours
+     *   20–49  → 60 jours
+     *   50–99  → 90 jours
+     *   100+   → 180 jours
+     *
+     * Appelé APRÈS l'incrément donc on passe déjà le nouveau total.
+     */
+    private fun expiresIso(reports: Long): String {
+        val days = when {
+            reports >= 100 -> 180L
+            reports >= 50  -> 90L
+            reports >= 20  -> 60L
+            else           -> 30L
+        }
+        return DateTimeFormatter.ISO_INSTANT.format(
+            Instant.now().plusSeconds(days * 24 * 60 * 60)
+        )
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // SIGNALER UN NUMÉRO
+    // ─────────────────────────────────────────────────────────────────────────
 
     /**
      * Signale un numéro comme indésirable.
-     * - Si le numéro existe déjà → incrémente le compteur + remet le TTL à 40 jours
-     * - Si nouveau → crée le document
+     * - Existe déjà → incrément + recalcul TTL dynamique
+     * - Nouveau     → insertion avec TTL initial (< 10 signalements → 30 jours)
      */
     suspend fun reportNumber(number: String, tag: String = "indésirable"): Result<Unit> {
         return try {
             val normalized = PhoneUtils.normalizeNumber(number)
-            val docRef     = collection.document(normalized)
-            val snapshot   = docRef.get().await()
-            val now        = Timestamp.now()
-            val expiresAt  = Timestamp(now.seconds + ReportedNumber.TTL_SECONDS, 0)
+            val existing   = fetchFromSupabase(normalized)
 
-            if (snapshot.exists()) {
-                // Numéro déjà signalé → incrémente + remet le TTL (glissant)
-                docRef.update(
-                    mapOf(
-                        ReportedNumber.FIELD_REPORTS       to FieldValue.increment(1),
-                        ReportedNumber.FIELD_LAST_REPORTED to now,
-                        ReportedNumber.FIELD_EXPIRES_AT    to expiresAt,
-                        ReportedNumber.FIELD_TAGS          to FieldValue.arrayUnion(tag)
-                    )
-                ).await()
+            if (existing != null) {
+                val newReports = existing.reports + 1
+                val newTags    = (existing.tags + tag).distinct()
+                client.patch("$tableUrl?number=eq.$normalized") {
+                    supabaseHeaders()
+                    setBody("""
+                        {
+                          "reports":       $newReports,
+                          "last_reported": "${nowIso()}",
+                          "expires_at":    "${expiresIso(newReports)}",
+                          "tags":          ${tagsToJson(newTags)}
+                        }
+                    """.trimIndent())
+                }
             } else {
-                // Nouveau numéro signalé
-                val reported = ReportedNumber(
-                    number       = normalized,
-                    reports      = 1,
-                    lastReported = now,
-                    expiresAt    = expiresAt,
-                    tags         = listOf(tag)
-                )
-                docRef.set(reported.toMap()).await()
+                // Premier signalement → 30 jours (< 10 signalements)
+                client.post(tableUrl) {
+                    supabaseHeaders()
+                    header("Prefer", "return=minimal")
+                    setBody("""
+                        {
+                          "number":        "$normalized",
+                          "reports":       1,
+                          "last_reported": "${nowIso()}",
+                          "expires_at":    "${expiresIso(1)}",
+                          "tags":          ${tagsToJson(listOf(tag))}
+                        }
+                    """.trimIndent())
+                }
             }
 
-            // Invalide le cache
             cache.remove(normalized)
             Result.success(Unit)
 
         } catch (e: Exception) {
+            Log.e("ReportRepository", "reportNumber failed: ${e.message}", e)
             Result.failure(e)
         }
     }
 
-    /**
-     * Vérifie si un numéro est signalé par la communauté.
-     * Retourne null si inconnu, ou le ReportedNumber s'il existe.
-     * Utilise un cache pour ne pas interroger Firestore à chaque appel entrant.
-     */
+    // ─────────────────────────────────────────────────────────────────────────
+    // VÉRIFIER UN NUMÉRO
+    // ─────────────────────────────────────────────────────────────────────────
+
     suspend fun checkNumber(number: String): ReportedNumber? {
         return try {
             val normalized = PhoneUtils.normalizeNumber(number)
-
-            // Retourne le cache si disponible
             if (cache.containsKey(normalized)) return cache[normalized]
-
-            val snapshot = collection.document(normalized).get().await()
-            val result   = if (snapshot.exists()) {
-                ReportedNumber(
-                    number       = snapshot.getString(ReportedNumber.FIELD_NUMBER) ?: normalized,
-                    reports      = snapshot.getLong(ReportedNumber.FIELD_REPORTS) ?: 0,
-                    lastReported = snapshot.getTimestamp(ReportedNumber.FIELD_LAST_REPORTED) ?: Timestamp.now(),
-                    expiresAt    = snapshot.getTimestamp(ReportedNumber.FIELD_EXPIRES_AT) ?: Timestamp.now(),
-                    tags         = (snapshot.get(ReportedNumber.FIELD_TAGS) as? List<*>)
-                        ?.filterIsInstance<String>() ?: emptyList()
-                )
-            } else null
-
+            val result = fetchFromSupabase(normalized)
             cache[normalized] = result
             result
-
         } catch (e: Exception) {
+            Log.e("ReportRepository", "checkNumber failed: ${e.message}", e)
             null
         }
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // TOP SIGNALÉS
+    // ─────────────────────────────────────────────────────────────────────────
+
     /**
      * Récupère les numéros les plus signalés (top 50).
-     * Utile pour un écran "numéros dangereux" futur.
+     * Filtre côté Supabase : exclut les entrées expirées (expires_at < now).
      */
-    suspend fun getTopReported(limit: Long = 50): List<ReportedNumber> {
+    suspend fun getTopReported(limit: Int = 50): List<ReportedNumber> {
         return try {
-            val snapshot = collection
-                .orderBy(ReportedNumber.FIELD_REPORTS, com.google.firebase.firestore.Query.Direction.DESCENDING)
-                .limit(limit)
-                .get()
-                .await()
-
-            snapshot.documents.mapNotNull { doc ->
-                if (!doc.exists()) return@mapNotNull null
-                ReportedNumber(
-                    number       = doc.getString(ReportedNumber.FIELD_NUMBER) ?: "",
-                    reports      = doc.getLong(ReportedNumber.FIELD_REPORTS) ?: 0,
-                    lastReported = doc.getTimestamp(ReportedNumber.FIELD_LAST_REPORTED) ?: Timestamp.now(),
-                    expiresAt    = doc.getTimestamp(ReportedNumber.FIELD_EXPIRES_AT) ?: Timestamp.now(),
-                    tags         = (doc.get(ReportedNumber.FIELD_TAGS) as? List<*>)
-                        ?.filterIsInstance<String>() ?: emptyList()
-                )
+            val nowIsoStr = nowIso()
+            val response: HttpResponse = client.get(tableUrl) {
+                supabaseHeaders()
+                parameter("order",      "reports.desc")
+                parameter("limit",      limit.toString())
+                parameter("select",     "*")
+                // FIX : filtrer les expirés directement côté Supabase
+                parameter("expires_at", "gt.$nowIsoStr")
             }
+            val body = response.bodyAsText()
+            Json { ignoreUnknownKeys = true }.decodeFromString<List<ReportedNumber>>(body)
         } catch (e: Exception) {
-            Log.e("ReportRepository", "getTopReported FAILED: ${e.javaClass.simpleName} — ${e.message}", e)
+            Log.e("ReportRepository", "getTopReported failed: ${e.message}", e)
             emptyList()
         }
     }
 
-    /** Vide le cache local */
     fun clearCache() = cache.clear()
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // PRIVÉ
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private suspend fun fetchFromSupabase(normalized: String): ReportedNumber? {
+        val response: HttpResponse = client.get(tableUrl) {
+            supabaseHeaders()
+            parameter("number", "eq.$normalized")
+            parameter("select", "*")
+            parameter("limit",  "1")
+        }
+        val body = response.bodyAsText()
+        return Json { ignoreUnknownKeys = true }
+            .decodeFromString<List<ReportedNumber>>(body)
+            .firstOrNull()
+    }
+
+    private fun tagsToJson(tags: List<String>): String =
+        "[${tags.joinToString(",") { "\"$it\"" }}]"
 }
