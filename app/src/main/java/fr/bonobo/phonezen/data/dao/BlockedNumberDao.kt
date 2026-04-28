@@ -4,8 +4,10 @@ import androidx.room.*
 import fr.bonobo.phonezen.data.model.BlockedNumber
 import kotlinx.coroutines.flow.Flow
 
+
 @Dao
 interface BlockedNumberDao {
+
     @Query("SELECT * FROM blocked_numbers ORDER BY timestamp DESC")
     fun getAll(): Flow<List<BlockedNumber>>
 

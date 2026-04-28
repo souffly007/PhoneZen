@@ -24,6 +24,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import fr.bonobo.phonezen.data.model.BlockingProfile
 import fr.bonobo.phonezen.ui.theme.*
 import fr.bonobo.phonezen.utils.BackupManager
 import fr.bonobo.phonezen.viewmodel.MainViewModel
@@ -36,7 +37,8 @@ fun SettingsScreen(
     themeVm: ThemeViewModel,
     onNavigateToWhitelist  : () -> Unit = {},
     onNavigateToTheme      : () -> Unit = {},
-    onNavigateToTopReported: () -> Unit = {}
+    onNavigateToTopReported: () -> Unit = {},
+    onNavigateToProfiles   : () -> Unit = {}   // ← NOUVEAU
 ) {
     val c                = LocalColors.current
     val ctx              = LocalContext.current
@@ -51,26 +53,27 @@ fun SettingsScreen(
     val scheduleEndM     by vm.scheduleEndMinute.collectAsState()
     val currentTheme     by themeVm.theme.collectAsState()
 
+    // ── Profil actif (pour le badge dans le résumé) ──
+    val activeProfile    by vm.activeProfile.collectAsState()
+    val vacationConfig   by vm.vacationConfig.collectAsState()
+
     var showStartPicker  by remember { mutableStateOf(false) }
     var showEndPicker    by remember { mutableStateOf(false) }
 
-    // ── Backup/Restore state ──
-    var backupMessage    by remember { mutableStateOf<String?>(null) }
-    var isBackupLoading  by remember { mutableStateOf(false) }
+    var backupMessage      by remember { mutableStateOf<String?>(null) }
+    var isBackupLoading    by remember { mutableStateOf(false) }
     var showRestoreConfirm by remember { mutableStateOf(false) }
     var pendingRestoreUri  by remember { mutableStateOf<Uri?>(null) }
 
-    // Lanceur pour partager le fichier de sauvegarde
     val shareLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult()
-    ) { /* rien à faire après partage */ }
+    ) {}
 
-    // Lanceur pour choisir un fichier de restauration
     val restoreLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.GetContent()
     ) { uri ->
         if (uri != null) {
-            pendingRestoreUri = uri
+            pendingRestoreUri  = uri
             showRestoreConfirm = true
         }
     }
@@ -83,6 +86,107 @@ fun SettingsScreen(
     ) {
         SettingsTopBar("Réglages")
 
+        // ══════════════════════════════════════════════════════════════
+        // PROFILS DE BLOCAGE (nouvelle section en tête)
+        // ══════════════════════════════════════════════════════════════
+        SectionHeader("👤 Profil de blocage")
+
+        // ── Mini-résumé du profil actif cliquable ──
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 4.dp),
+            shape  = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(containerColor = c.surfaceVar),
+            onClick = onNavigateToProfiles
+        ) {
+            Row(
+                modifier          = Modifier.padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Emoji du profil actif
+                Text(activeProfile.emoji, fontSize = 26.sp)
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            "Profil : ${activeProfile.label}",
+                            fontSize   = 15.sp,
+                            color      = c.textPrimary,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        // Badge ACTIF coloré selon le profil
+                        Surface(
+                            shape = RoundedCornerShape(20.dp),
+                            color = when (activeProfile) {
+                                BlockingProfile.WORK     -> c.neonCyan.copy(alpha = 0.2f)
+                                BlockingProfile.HOME     -> c.neonOrange.copy(alpha = 0.2f)
+                                BlockingProfile.VACATION -> c.neonGreen.copy(alpha = 0.2f)
+                            }
+                        ) {
+                            Text(
+                                text     = "ACTIF",
+                                fontSize = 9.sp,
+                                color    = when (activeProfile) {
+                                    BlockingProfile.WORK     -> c.neonCyan
+                                    BlockingProfile.HOME     -> c.neonOrange
+                                    BlockingProfile.VACATION -> c.neonGreen
+                                },
+                                fontWeight = FontWeight.Bold,
+                                modifier   = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                            )
+                        }
+                    }
+                    // Sous-titre contextuel
+                    val subtitle = when (activeProfile) {
+                        BlockingProfile.WORK     -> "Contacts, favoris et numéros pro autorisés"
+                        BlockingProfile.HOME     -> "Contacts et favoris uniquement"
+                        BlockingProfile.VACATION ->
+                            if (vacationConfig.hasEndDate && !vacationConfig.isExpired) {
+                                val fmt = java.text.SimpleDateFormat("dd/MM", java.util.Locale.FRANCE)
+                                "Favoris uniquement · Retour le ${fmt.format(java.util.Date(vacationConfig.endTimestamp))}"
+                            } else {
+                                "Favoris et liste blanche uniquement"
+                            }
+                    }
+                    Text(subtitle, fontSize = 12.sp, color = c.textSecond)
+                }
+                Icon(Icons.Default.ChevronRight, null, tint = c.textSecond)
+            }
+        }
+
+        // ── Sélecteur rapide (3 boutons inline) ──
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            BlockingProfile.entries.forEach { profile ->
+                val isActive = activeProfile == profile
+                OutlinedButton(
+                    onClick  = { vm.setActiveProfile(profile) },
+                    modifier = Modifier.weight(1f),
+                    shape    = RoundedCornerShape(10.dp),
+                    colors   = ButtonDefaults.outlinedButtonColors(
+                        containerColor = if (isActive) c.neonCyan.copy(alpha = 0.12f) else c.surfaceVar,
+                        contentColor   = if (isActive) c.neonCyan else c.textSecond
+                    ),
+                    border   = androidx.compose.foundation.BorderStroke(
+                        width = if (isActive) 1.5.dp else 0.5.dp,
+                        color = if (isActive) c.neonCyan else c.glassStroke
+                    )
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(profile.emoji, fontSize = 18.sp)
+                        Text(profile.label, fontSize = 10.sp, fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal)
+                    }
+                }
+            }
+        }
+
+        // ══════════════════════════════════════════════════════════════
         SectionHeader("🛡️ Protection")
 
         SettingSwitch(
@@ -102,7 +206,7 @@ fun SettingsScreen(
         SettingItem(
             icon     = Icons.Default.Block,
             title    = "Filtres anti-spam actifs",
-            subtitle = "prefixes_blocked_fr.json v4.1 (2026-03-28)",
+            subtitle = "prefixes_blocked_fr.json v4.1 (2026-04-05)",
             onClick  = {}
         )
         SettingItem(
@@ -161,33 +265,23 @@ fun SettingsScreen(
             onClick  = onNavigateToWhitelist
         )
 
-        // ══════════════════════════════════════════════════════════════
-        // SAUVEGARDE / RESTAURATION
-        // ══════════════════════════════════════════════════════════════
         SectionHeader("💾 Sauvegarde & Restauration")
 
-        // Message feedback
-        backupMessage?.let { msg ->
-            InfoCard(msg)
-        }
+        backupMessage?.let { msg -> InfoCard(msg) }
 
-        // Bouton Sauvegarder
         Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 4.dp),
-            shape  = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(containerColor = c.surfaceVar),
-            onClick = {
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+            shape    = RoundedCornerShape(12.dp),
+            colors   = CardDefaults.cardColors(containerColor = c.surfaceVar),
+            onClick  = {
                 if (!isBackupLoading) {
                     isBackupLoading = true
-                    backupMessage = null
+                    backupMessage   = null
                     scope.launch {
                         val uri = BackupManager.createBackup(ctx)
                         isBackupLoading = false
                         if (uri != null) {
                             backupMessage = "✅ Sauvegarde créée"
-                            // Ouvre le sélecteur de partage
                             val shareIntent = Intent(Intent.ACTION_SEND).apply {
                                 type = "application/json"
                                 putExtra(Intent.EXTRA_STREAM, uri)
@@ -201,55 +295,33 @@ fun SettingsScreen(
                 }
             }
         ) {
-            Row(
-                modifier = Modifier.padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+            Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (isBackupLoading) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(22.dp),
-                        color = c.neonCyan,
-                        strokeWidth = 2.dp
-                    )
+                    CircularProgressIndicator(modifier = Modifier.size(22.dp), color = c.neonCyan, strokeWidth = 2.dp)
                 } else {
                     Icon(Icons.Default.SaveAlt, null, tint = c.neonCyan, modifier = Modifier.size(22.dp))
                 }
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     Text("Sauvegarder", fontSize = 15.sp, color = c.textPrimary, fontWeight = FontWeight.Medium)
-                    Text(
-                        "Exporte favoris, liste blanche, blocages et paramètres",
-                        fontSize = 12.sp, color = c.textSecond
-                    )
+                    Text("Exporte favoris, liste blanche, blocages et paramètres", fontSize = 12.sp, color = c.textSecond)
                 }
                 Icon(Icons.Default.ChevronRight, null, tint = c.textSecond)
             }
         }
 
-        // Bouton Restaurer
         Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 4.dp),
-            shape  = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(containerColor = c.surfaceVar),
-            onClick = {
-                backupMessage = null
-                restoreLauncher.launch("application/json")
-            }
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+            shape    = RoundedCornerShape(12.dp),
+            colors   = CardDefaults.cardColors(containerColor = c.surfaceVar),
+            onClick  = { backupMessage = null; restoreLauncher.launch("application/json") }
         ) {
-            Row(
-                modifier = Modifier.padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+            Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.RestorePage, null, tint = c.neonOrange, modifier = Modifier.size(22.dp))
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     Text("Restaurer", fontSize = 15.sp, color = c.textPrimary, fontWeight = FontWeight.Medium)
-                    Text(
-                        "Importe une sauvegarde PhoneZen existante",
-                        fontSize = 12.sp, color = c.textSecond
-                    )
+                    Text("Importe une sauvegarde PhoneZen existante", fontSize = 12.sp, color = c.textSecond)
                 }
                 Icon(Icons.Default.ChevronRight, null, tint = c.textSecond)
             }
@@ -264,7 +336,7 @@ fun SettingsScreen(
                 AppTheme.CYBER_DARK -> "Cyber Dark (actif)"
                 AppTheme.ZEN_LIGHT  -> "Zen Clair (actif)"
             },
-            onClick  = onNavigateToTheme
+            onClick = onNavigateToTheme
         )
 
         SectionHeader("📱 Application par défaut")
@@ -274,9 +346,8 @@ fun SettingsScreen(
             title    = "Définir comme application téléphone",
             subtitle = "Requis pour gérer les appels entrants",
             onClick  = {
-                try {
-                    ctx.startActivity(Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS))
-                } catch (e: Exception) {
+                try { ctx.startActivity(Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS)) }
+                catch (e: Exception) {
                     ctx.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
                         data = Uri.parse("package:${ctx.packageName}")
                     })
@@ -351,17 +422,13 @@ fun SettingsScreen(
             onDismiss     = { showEndPicker = false }
         )
     }
-
-    // ── Confirmation avant restauration ──
     if (showRestoreConfirm) {
         val c = LocalColors.current
         AlertDialog(
             onDismissRequest = { showRestoreConfirm = false },
             containerColor   = c.surfaceVar,
-            title = {
-                Text("Restaurer la sauvegarde ?", color = c.textPrimary, fontWeight = FontWeight.Bold)
-            },
-            text = {
+            title = { Text("Restaurer la sauvegarde ?", color = c.textPrimary, fontWeight = FontWeight.Bold) },
+            text  = {
                 Text(
                     "Cette action remplacera vos favoris, liste blanche, numéros bloqués et paramètres actuels.",
                     color = c.textSecond, fontSize = 14.sp
@@ -374,15 +441,10 @@ fun SettingsScreen(
                     scope.launch {
                         val result = BackupManager.restoreBackup(ctx, uri)
                         backupMessage = when (result) {
-                            is BackupManager.RestoreResult.Success ->
-                                "✅ Restauration réussie — redémarrez l'app"
-                            is BackupManager.RestoreResult.Error   ->
-                                "❌ ${result.message}"
+                            is BackupManager.RestoreResult.Success -> "✅ Restauration réussie — redémarrez l'app"
+                            is BackupManager.RestoreResult.Error   -> "❌ ${result.message}"
                         }
-                        // Recharge les données dans le ViewModel
-                        if (result is BackupManager.RestoreResult.Success) {
-                            vm.forceReload(ctx)
-                        }
+                        if (result is BackupManager.RestoreResult.Success) vm.forceReload(ctx)
                         pendingRestoreUri = null
                     }
                 }) {
@@ -390,10 +452,7 @@ fun SettingsScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = {
-                    showRestoreConfirm = false
-                    pendingRestoreUri  = null
-                }) {
+                TextButton(onClick = { showRestoreConfirm = false; pendingRestoreUri = null }) {
                     Text("Annuler", color = c.textSecond)
                 }
             }
@@ -408,14 +467,11 @@ fun SettingsScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun TimePickerDialog(
-    initialHour: Int,
-    initialMinute: Int,
-    onConfirm: (Int, Int) -> Unit,
-    onDismiss: () -> Unit
+    initialHour: Int, initialMinute: Int,
+    onConfirm: (Int, Int) -> Unit, onDismiss: () -> Unit
 ) {
     val c     = LocalColors.current
     val state = rememberTimePickerState(initialHour = initialHour, initialMinute = initialMinute, is24Hour = true)
-
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor   = c.surfaceVar,
@@ -500,11 +556,8 @@ private fun SectionHeader(title: String) {
 
 @Composable
 private fun SettingSwitch(
-    icon: ImageVector,
-    title: String,
-    subtitle: String,
-    checked: Boolean,
-    onToggle: (Boolean) -> Unit
+    icon: ImageVector, title: String, subtitle: String,
+    checked: Boolean, onToggle: (Boolean) -> Unit
 ) {
     val c = LocalColors.current
     Card(
@@ -520,13 +573,10 @@ private fun SettingSwitch(
                 Text(subtitle, fontSize = 12.sp, color = c.textSecond)
             }
             Switch(
-                checked         = checked,
-                onCheckedChange = onToggle,
-                colors          = SwitchDefaults.colors(
-                    checkedThumbColor   = c.background,
-                    checkedTrackColor   = c.neonCyan,
-                    uncheckedThumbColor = c.textSecond,
-                    uncheckedTrackColor = c.glassStroke
+                checked = checked, onCheckedChange = onToggle,
+                colors  = SwitchDefaults.colors(
+                    checkedThumbColor   = c.background, checkedTrackColor   = c.neonCyan,
+                    uncheckedThumbColor = c.textSecond, uncheckedTrackColor = c.glassStroke
                 )
             )
         }

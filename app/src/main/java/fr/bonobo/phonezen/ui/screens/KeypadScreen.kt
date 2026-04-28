@@ -1,5 +1,11 @@
 package fr.bonobo.phonezen.ui.screens
 
+import android.app.Activity
+import android.content.Intent
+import android.speech.RecognizerIntent
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -11,6 +17,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Backspace
 import androidx.compose.material.icons.filled.Call
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.SimCard
 import androidx.compose.material.icons.filled.Voicemail
 import androidx.compose.material3.*
@@ -30,8 +37,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import fr.bonobo.phonezen.data.model.Contact
 import fr.bonobo.phonezen.ui.theme.*
 import fr.bonobo.phonezen.util.SimInfo
+import fr.bonobo.phonezen.util.VoiceDialHelper
 import fr.bonobo.phonezen.util.getActiveSims
 import fr.bonobo.phonezen.viewmodel.MainViewModel
 
@@ -63,7 +72,7 @@ fun DialKey(
             .clip(CircleShape)
             .pointerInput(key.main) {
                 detectTapGestures(
-                    onTap = { onTap() },
+                    onTap      = { onTap() },
                     onLongPress = { onLongPress?.invoke() }
                 )
             },
@@ -85,36 +94,130 @@ fun KeypadScreen(
     onVoicemail: () -> Unit,
     vm: MainViewModel
 ) {
-    val c = LocalColors.current
-    val context = LocalContext.current
+    val c            = LocalColors.current
+    val context      = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
-    var number by remember { mutableStateOf("") }
+    var number       by remember { mutableStateOf("") }
 
-    val sims = remember { getActiveSims(context) }
+    val sims      = remember { getActiveSims(context) }
     val isDualSim = sims.size >= 2
-    val isUssd = remember(number) { isUssdCode(number) }
+    val isUssd    = remember(number) { isUssdCode(number) }
 
-    // ── Préremplissage depuis un intent tel: (lien navigateur) ──
+    // ── Préremplissage depuis un intent tel: ──────────────────────────────────
     val dialpadNumber by vm.dialpadNumber.collectAsState()
     LaunchedEffect(dialpadNumber) {
         if (dialpadNumber.isNotEmpty()) {
             number = dialpadNumber
-            vm.clearDialpadNumber() // consommé, on remet à zéro
+            vm.clearDialpadNumber()
         }
     }
 
-    // ── Suggestions réactives ──
+    // ── Suggestions réactives ─────────────────────────────────────────────────
     val contactsList by vm.contacts.collectAsState()
-    val suggestions = remember(number, contactsList) {
-        vm.getSuggestions(number)
+    val suggestions  = remember(number, contactsList) { vm.getSuggestions(number) }
+
+    // ── États locaux ──────────────────────────────────────────────────────────
+    var showSimDialog   by remember { mutableStateOf(false) }
+    var pendingNumber   by remember { mutableStateOf("") }
+    var showPasteMenu   by remember { mutableStateOf(false) }
+    var voiceContacts   by remember { mutableStateOf<List<Contact>>(emptyList()) }
+    var showVoiceDialog by remember { mutableStateOf(false) }
+
+    // ── Picker multi-numéros géré par le ViewModel ────────────────────────────
+    val pendingCallContact by vm.pendingCallContact.collectAsState()
+    pendingCallContact?.let { contact ->
+        PhoneNumberPickerDialog(
+            contactName = contact.name,
+            numbers     = contact.phoneNumbers,
+            onSelect    = { num ->
+                vm.dismissPendingCall()
+                if (isDualSim) {
+                    pendingNumber = num
+                    showSimDialog = true
+                } else {
+                    onCall(num)
+                }
+            },
+            onDismiss = { vm.dismissPendingCall() }
+        )
     }
 
-    // ── Dialog choix SIM ──
-    var showSimDialog by remember { mutableStateOf(false) }
-    var pendingNumber by remember { mutableStateOf("") }
+    // ── Helper appel contact ──────────────────────────────────────────────────
+    // Si 1 numéro → appel direct (ou dialog SIM si dual SIM)
+    // Si plusieurs numéros → picker via ViewModel
+    fun callContact(contact: Contact) {
+        when (contact.phoneNumbers.size) {
+            0    -> Unit
+            1    -> {
+                val num = contact.phoneNumbers.first()
+                if (isDualSim) {
+                    pendingNumber = num
+                    showSimDialog = true
+                } else {
+                    onCall(num)
+                }
+            }
+            else -> {
+                // Le picker s'affiche via pendingCallContact ci-dessus
+                vm.requestCall(contact) { /* géré par le state */ }
+            }
+        }
+    }
 
-    // ── Menu contextuel coller ──
-    var showPasteMenu by remember { mutableStateOf(false) }
+    // ── Reconnaissance vocale ─────────────────────────────────────────────────
+    val voiceLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val matches = result.data
+                ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+                ?: return@rememberLauncherForActivityResult
+
+            val raw    = matches.firstOrNull() ?: return@rememberLauncherForActivityResult
+            val parsed = VoiceDialHelper.parseCommand(raw) ?: run {
+                Toast.makeText(context, "Commande non reconnue : $raw", Toast.LENGTH_SHORT).show()
+                return@rememberLauncherForActivityResult
+            }
+
+            if (VoiceDialHelper.isPhoneNumber(parsed)) {
+                // C'est un numéro → on le met dans le champ
+                number = parsed.filter { it.isDigit() || it == '+' }
+            } else {
+                // C'est un nom → recherche dans les contacts
+                val found = vm.findContactsByName(parsed)
+                when {
+                    found.isEmpty() -> {
+                        Toast.makeText(context, "Contact « $parsed » introuvable", Toast.LENGTH_SHORT).show()
+                    }
+                    found.size == 1 -> {
+                        // Un seul contact trouvé → appel direct ou picker si multi-numéros
+                        callContact(found.first())
+                    }
+                    else -> {
+                        // Plusieurs contacts → dialog de sélection du contact
+                        voiceContacts = found.take(5)
+                        showVoiceDialog = true
+                    }
+                }
+            }
+        }
+    }
+
+    fun launchVoiceRecognition() {
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "fr-FR")
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "fr-FR")
+            putExtra(RecognizerIntent.EXTRA_ONLY_RETURN_LANGUAGE_PREFERENCE, true)
+            putExtra(RecognizerIntent.EXTRA_PROMPT, "Dites « Appelle [nom] »")
+            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
+        }
+        try {
+            voiceLauncher.launch(intent)
+        } catch (e: Exception) {
+            Toast.makeText(context, "Reconnaissance vocale non disponible", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     fun handleCall() {
         if (number.isEmpty()) return
@@ -127,15 +230,15 @@ fun KeypadScreen(
     }
 
     fun pasteFromClipboard() {
-        val text = clipboardManager.getText()?.text ?: return
+        val text    = clipboardManager.getText()?.text ?: return
         val cleaned = text.filter { it.isDigit() || it == '+' || it == '*' || it == '#' }
         if (cleaned.isNotEmpty()) number = cleaned
     }
 
-    // ── Dialog sélection SIM ──
+    // ── Dialog sélection SIM ──────────────────────────────────────────────────
     if (showSimDialog) {
         SimSelectionDialog(
-            sims = sims,
+            sims   = sims,
             number = pendingNumber,
             onSelect = { sim ->
                 showSimDialog = false
@@ -145,45 +248,57 @@ fun KeypadScreen(
         )
     }
 
+    // ── Dialog sélection contact vocal ────────────────────────────────────────
+    if (showVoiceDialog) {
+        VoiceContactDialog(
+            contacts  = voiceContacts,
+            onSelect  = { contact ->
+                showVoiceDialog = false
+                callContact(contact)
+            },
+            onDismiss = { showVoiceDialog = false }
+        )
+    }
+
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
             .background(c.background)
             .padding(horizontal = 16.dp)
     ) {
-        val screenH = maxHeight
-        val isSmall = screenH < 600.dp
+        val screenH  = maxHeight
+        val isSmall  = screenH < 600.dp
         val isMedium = screenH < 750.dp
 
-        val keySize = when { isSmall -> 58.dp; isMedium -> 66.dp; else -> 74.dp }
-        val keyFontSize = when { isSmall -> 22f; isMedium -> 24f; else -> 27f }
-        val fabSize = when { isSmall -> 60.dp; isMedium -> 68.dp; else -> 74.dp }
-        val actionSize = when { isSmall -> 48.dp; isMedium -> 52.dp; else -> 56.dp }
-        val displayH = when { isSmall -> 50.dp; isMedium -> 58.dp; else -> 64.dp }
-        val titleSize = when { isSmall -> 14f; isMedium -> 15f; else -> 16f }
-        val spacingIn = when { isSmall -> 2.dp; isMedium -> 4.dp; else -> 6.dp }
-        val spacingOut = when { isSmall -> 4.dp; isMedium -> 8.dp; else -> 12.dp }
+        val keySize     = when { isSmall -> 58.dp; isMedium -> 66.dp; else -> 74.dp }
+        val keyFontSize = when { isSmall -> 22f;   isMedium -> 24f;   else -> 27f   }
+        val fabSize     = when { isSmall -> 60.dp; isMedium -> 68.dp; else -> 74.dp }
+        val actionSize  = when { isSmall -> 48.dp; isMedium -> 52.dp; else -> 56.dp }
+        val displayH    = when { isSmall -> 50.dp; isMedium -> 58.dp; else -> 64.dp }
+        val titleSize   = when { isSmall -> 14f;   isMedium -> 15f;   else -> 16f   }
+        val spacingIn   = when { isSmall -> 2.dp;  isMedium -> 4.dp;  else -> 6.dp  }
+        val spacingOut  = when { isSmall -> 4.dp;  isMedium -> 8.dp;  else -> 12.dp }
 
         Column(
-            modifier = Modifier.fillMaxSize(),
+            modifier            = Modifier.fillMaxSize(),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceEvenly
         ) {
-            // ── Bloc 1 : Titre + numéro + suggestions ──
+            // ── Bloc 1 : Titre + numéro + suggestions ─────────────────────────
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
-                    text = if (isUssd) "CODE USSD" else "CLAVIER",
-                    fontSize = titleSize.sp,
-                    color = if (isUssd) c.neonCyan else c.neonOrange,
+                    text       = if (isUssd) "CODE USSD" else "CLAVIER",
+                    fontSize   = titleSize.sp,
+                    color      = if (isUssd) c.neonCyan else c.neonOrange,
                     fontWeight = FontWeight.ExtraBold
                 )
                 Spacer(Modifier.height(spacingIn))
 
-                // ── Zone numéro ──
+                // ── Zone numéro ───────────────────────────────────────────────
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(14.dp),
-                    colors = CardDefaults.cardColors(
+                    shape    = RoundedCornerShape(14.dp),
+                    colors   = CardDefaults.cardColors(
                         containerColor = if (isUssd) c.neonCyan.copy(0.1f) else c.surface
                     )
                 ) {
@@ -193,67 +308,59 @@ fun KeypadScreen(
                             .height(displayH)
                             .padding(horizontal = 16.dp)
                             .pointerInput(Unit) {
-                                detectTapGestures(
-                                    onLongPress = { showPasteMenu = true }
-                                )
+                                detectTapGestures(onLongPress = { showPasteMenu = true })
                             },
                         contentAlignment = Alignment.Center
                     ) {
                         if (number.isEmpty()) {
                             Text(
-                                text = "Composez un numéro",
-                                fontSize = 15.sp,
-                                color = c.textSecond,
+                                text      = "Composez un numéro",
+                                fontSize  = 15.sp,
+                                color     = c.textSecond,
                                 textAlign = TextAlign.Center
                             )
                         } else {
                             BasicTextField(
-                                value = number,
+                                value         = number,
                                 onValueChange = { new ->
                                     number = new.filter { it.isDigit() || it == '+' || it == '*' || it == '#' }
                                 },
-                                singleLine = true,
-                                textStyle = TextStyle(
-                                    fontSize = 26.sp,
+                                singleLine  = true,
+                                textStyle   = TextStyle(
+                                    fontSize   = 26.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = if (isUssd) c.neonCyan else c.textPrimary,
-                                    textAlign = TextAlign.Center
+                                    color      = if (isUssd) c.neonCyan else c.textPrimary,
+                                    textAlign  = TextAlign.Center
                                 ),
                                 cursorBrush = SolidColor(c.neonCyan),
-                                modifier = Modifier.fillMaxWidth()
+                                modifier    = Modifier.fillMaxWidth()
                             )
                         }
                     }
 
-                    // ── Menu contextuel Coller ──
+                    // ── Menu contextuel Coller ────────────────────────────────
                     DropdownMenu(
-                        expanded = showPasteMenu,
+                        expanded         = showPasteMenu,
                         onDismissRequest = { showPasteMenu = false }
                     ) {
                         DropdownMenuItem(
-                            text = { Text("Coller") },
-                            onClick = {
-                                pasteFromClipboard()
-                                showPasteMenu = false
-                            }
+                            text    = { Text("Coller") },
+                            onClick = { pasteFromClipboard(); showPasteMenu = false }
                         )
                         if (number.isNotEmpty()) {
                             DropdownMenuItem(
-                                text = { Text("Effacer tout") },
-                                onClick = {
-                                    number = ""
-                                    showPasteMenu = false
-                                }
+                                text    = { Text("Effacer tout") },
+                                onClick = { number = ""; showPasteMenu = false }
                             )
                         }
                     }
                 }
 
-                // ── Suggestions de contacts ──
+                // ── Suggestions de contacts ───────────────────────────────────
                 if (suggestions.isNotEmpty()) {
                     Spacer(Modifier.height(spacingIn))
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier              = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.Center
                     ) {
                         suggestions.forEach { contact ->
@@ -270,21 +377,21 @@ fun KeypadScreen(
                                 color = c.neonCyan.copy(0.12f)
                             ) {
                                 Column(
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                    modifier            = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
                                     horizontalAlignment = Alignment.CenterHorizontally
                                 ) {
                                     Text(
-                                        text = contact.name,
-                                        fontSize = 11.sp,
+                                        text       = contact.name,
+                                        fontSize   = 11.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = c.neonCyan,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
+                                        color      = c.neonCyan,
+                                        maxLines   = 1,
+                                        overflow   = TextOverflow.Ellipsis
                                     )
                                     Text(
-                                        text = contact.phoneNumbers.firstOrNull() ?: "",
+                                        text     = contact.phoneNumbers.firstOrNull() ?: "",
                                         fontSize = 9.sp,
-                                        color = c.textSecond,
+                                        color    = c.textSecond,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis
                                     )
@@ -295,28 +402,28 @@ fun KeypadScreen(
                 }
             }
 
-            // ── Bloc 2 : Pavé numérique ──
+            // ── Bloc 2 : Pavé numérique ───────────────────────────────────────
             Column(
-                modifier = Modifier.fillMaxWidth(),
+                modifier            = Modifier.fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 DIAL_KEYS.chunked(3).forEach { row ->
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier              = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceEvenly,
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment     = Alignment.CenterVertically
                     ) {
                         row.forEach { key ->
                             DialKey(
-                                key = key,
-                                onTap = { number += key.main },
+                                key         = key,
+                                onTap       = { number += key.main },
                                 onLongPress = {
                                     if (key.main == "0") number += "+"
                                     if (key.main == "1") sims.firstOrNull()?.let {
                                         onCallWithSim(it.voicemail, it.subscriptionId)
                                     }
                                 },
-                                size = keySize,
+                                size     = keySize,
                                 fontSize = keyFontSize
                             )
                         }
@@ -325,91 +432,120 @@ fun KeypadScreen(
                 }
             }
 
-            // ── Bloc 3 : Actions + Messagerie ──
+            // ── Bloc 3 : Actions + Messagerie ─────────────────────────────────
             Column(
-                modifier = Modifier.fillMaxWidth(),
+                modifier            = Modifier.fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier              = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceEvenly,
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment     = Alignment.CenterVertically
                 ) {
-                    FilledIconButton(
-                        onClick = { if (number.isNotEmpty()) number = number.dropLast(1) },
-                        modifier = Modifier.size(actionSize),
-                        colors = IconButtonDefaults.filledIconButtonColors(containerColor = c.surface)
-                    ) {
-                        Icon(Icons.Default.Backspace, null, tint = c.neonRed)
+                    // ── Backspace + Micro (gauche) ────────────────────────────
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        FilledIconButton(
+                            onClick  = { if (number.isNotEmpty()) number = number.dropLast(1) },
+                            modifier = Modifier.size(actionSize),
+                            colors   = IconButtonDefaults.filledIconButtonColors(
+                                containerColor = c.surface
+                            )
+                        ) {
+                            Icon(Icons.Default.Backspace, null, tint = c.neonRed)
+                        }
+                        Spacer(Modifier.width(6.dp))
+                        FilledIconButton(
+                            onClick  = { launchVoiceRecognition() },
+                            modifier = Modifier.size((actionSize.value * 0.78f).dp),
+                            colors   = IconButtonDefaults.filledIconButtonColors(
+                                containerColor = c.neonCyan.copy(alpha = 0.15f)
+                            )
+                        ) {
+                            Icon(
+                                Icons.Default.Mic, null,
+                                tint     = c.neonCyan,
+                                modifier = Modifier.size((actionSize.value * 0.42f).dp)
+                            )
+                        }
                     }
 
+                    // ── Bouton appel ──────────────────────────────────────────
                     FloatingActionButton(
-                        onClick = { handleCall() },
-                        modifier = Modifier.size(fabSize),
+                        onClick        = { handleCall() },
+                        modifier       = Modifier.size(fabSize),
                         containerColor = if (isUssd) c.neonCyan else c.neonGreen,
-                        shape = CircleShape
+                        shape          = CircleShape
                     ) {
                         Icon(
-                            Icons.Default.Call, null, tint = Color.White,
+                            Icons.Default.Call, null,
+                            tint     = Color.White,
                             modifier = Modifier.size((fabSize.value * 0.47f).dp)
                         )
                     }
 
+                    // ── Effacer tout (droite) ─────────────────────────────────
                     FilledIconButton(
-                        onClick = { number = "" },
+                        onClick  = { number = "" },
                         modifier = Modifier.size(actionSize),
-                        colors = IconButtonDefaults.filledIconButtonColors(containerColor = c.surface)
+                        colors   = IconButtonDefaults.filledIconButtonColors(
+                            containerColor = c.surface
+                        )
                     ) {
                         Text(
-                            "C", fontSize = (actionSize.value * 0.38f).sp,
-                            fontWeight = FontWeight.Bold, color = c.neonOrange
+                            "C",
+                            fontSize   = (actionSize.value * 0.38f).sp,
+                            fontWeight = FontWeight.Bold,
+                            color      = c.neonOrange
                         )
                     }
                 }
 
                 Spacer(Modifier.height(spacingOut))
 
-                // ── Messagerie ──
+                // ── Messagerie ────────────────────────────────────────────────
                 if (isDualSim) {
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier              = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         sims.forEach { sim ->
                             SimVoicemailButton(
-                                sim = sim,
+                                sim      = sim,
                                 modifier = Modifier.weight(1f),
-                                onClick = { onCallWithSim(sim.voicemail, sim.subscriptionId) }
+                                onClick  = { onCallWithSim(sim.voicemail, sim.subscriptionId) }
                             )
                         }
                     }
                 } else {
                     sims.firstOrNull()?.let { sim ->
                         OutlinedButton(
-                            onClick = { onCall(sim.voicemail) },
+                            onClick  = { onCall(sim.voicemail) },
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.outlinedButtonColors(
+                            shape    = RoundedCornerShape(12.dp),
+                            colors   = ButtonDefaults.outlinedButtonColors(
                                 containerColor = c.surface,
-                                contentColor = c.textPrimary
+                                contentColor   = c.textPrimary
                             )
                         ) {
                             Icon(
                                 Icons.Default.Voicemail, null,
-                                tint = c.neonCyan, modifier = Modifier.size(20.dp)
+                                tint     = c.neonCyan,
+                                modifier = Modifier.size(20.dp)
                             )
                             Spacer(Modifier.width(8.dp))
                             Column(horizontalAlignment = Alignment.Start) {
                                 Text(
                                     "MESSAGERIE",
                                     fontWeight = FontWeight.Bold,
-                                    fontSize = 13.sp,
-                                    color = c.textPrimary
+                                    fontSize   = 13.sp,
+                                    color      = c.textPrimary
                                 )
                                 Text(
                                     "${sim.carrierName} · ${sim.voicemail}",
-                                    fontSize = 11.sp, color = c.textSecond,
-                                    maxLines = 1, overflow = TextOverflow.Ellipsis
+                                    fontSize = 11.sp,
+                                    color    = c.textSecond,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                         }
@@ -420,7 +556,77 @@ fun KeypadScreen(
     }
 }
 
-// ── Dialog sélection SIM ──
+// ── Dialog sélection contact vocal ───────────────────────────────────────────
+@Composable
+private fun VoiceContactDialog(
+    contacts: List<Contact>,
+    onSelect: (Contact) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val c = LocalColors.current
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor   = c.surfaceVar,
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.Mic, null, tint = c.neonCyan, modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Quel contact ?", color = c.textPrimary, fontWeight = FontWeight.Bold)
+            }
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                contacts.forEach { contact ->
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onSelect(contact) },
+                        shape  = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = c.neonCyan.copy(alpha = 0.08f)
+                        )
+                    ) {
+                        Row(
+                            modifier          = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            ContactAvatar(
+                                name     = contact.name,
+                                photoUri = contact.photoUri,
+                                size     = 38
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Column {
+                                Text(
+                                    text       = contact.name,
+                                    fontSize   = 15.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color      = c.textPrimary
+                                )
+                                // Affiche tous les numéros disponibles
+                                contact.phoneNumbers.forEach { num ->
+                                    Text(
+                                        text     = num,
+                                        fontSize = 12.sp,
+                                        color    = c.textSecond
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Annuler", color = c.textSecond)
+            }
+        }
+    )
+}
+
+// ── Dialog sélection SIM ──────────────────────────────────────────────────────
 @Composable
 private fun SimSelectionDialog(
     sims: List<SimInfo>,
@@ -431,49 +637,45 @@ private fun SimSelectionDialog(
     val c = LocalColors.current
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = c.surfaceVar,
+        containerColor   = c.surfaceVar,
         title = {
             Text("Choisir la SIM", color = c.textPrimary, fontWeight = FontWeight.Bold)
         },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    text = "Appeler $number avec :",
-                    fontSize = 13.sp,
-                    color = c.textSecond
-                )
+                Text(text = "Appeler $number avec :", fontSize = 13.sp, color = c.textSecond)
                 sims.forEach { sim ->
                     val simColor = if (sim.slotIndex == 0) c.neonCyan else c.neonOrange
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable { onSelect(sim) },
-                        shape = RoundedCornerShape(12.dp),
+                        shape  = RoundedCornerShape(12.dp),
                         colors = CardDefaults.cardColors(
                             containerColor = simColor.copy(alpha = 0.1f)
                         )
                     ) {
                         Row(
-                            modifier = Modifier.padding(12.dp),
+                            modifier          = Modifier.padding(12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
                                 Icons.Default.SimCard, null,
-                                tint = simColor,
+                                tint     = simColor,
                                 modifier = Modifier.size(28.dp)
                             )
                             Spacer(Modifier.width(12.dp))
                             Column {
                                 Text(
-                                    text = sim.label,
-                                    fontSize = 15.sp,
+                                    text       = sim.label,
+                                    fontSize   = 15.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = simColor
+                                    color      = simColor
                                 )
                                 Text(
-                                    text = sim.carrierName,
+                                    text     = sim.carrierName,
                                     fontSize = 12.sp,
-                                    color = c.textSecond
+                                    color    = c.textSecond
                                 )
                             }
                         }
@@ -492,29 +694,33 @@ private fun SimSelectionDialog(
 
 @Composable
 private fun SimVoicemailButton(sim: SimInfo, modifier: Modifier, onClick: () -> Unit) {
-    val c = LocalColors.current
+    val c        = LocalColors.current
     val simColor = if (sim.slotIndex == 0) c.neonCyan else c.neonOrange
     OutlinedButton(
-        onClick = onClick,
+        onClick  = onClick,
         modifier = modifier,
-        shape = RoundedCornerShape(12.dp),
-        colors = ButtonDefaults.outlinedButtonColors(
+        shape    = RoundedCornerShape(12.dp),
+        colors   = ButtonDefaults.outlinedButtonColors(
             containerColor = c.surface,
-            contentColor = c.textPrimary
+            contentColor   = c.textPrimary
         )
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     Icons.Default.Voicemail, null,
-                    tint = simColor, modifier = Modifier.size(16.dp)
+                    tint     = simColor,
+                    modifier = Modifier.size(16.dp)
                 )
                 Spacer(Modifier.width(4.dp))
                 Text(sim.label, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = simColor)
             }
             Text(
-                sim.carrierName, fontSize = 10.sp, color = c.textSecond,
-                maxLines = 1, overflow = TextOverflow.Ellipsis
+                sim.carrierName,
+                fontSize = 10.sp,
+                color    = c.textSecond,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
             Text(sim.voicemail, fontSize = 10.sp, color = c.textSecond, maxLines = 1)
         }

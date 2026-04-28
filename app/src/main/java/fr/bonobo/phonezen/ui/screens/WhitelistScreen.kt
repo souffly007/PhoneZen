@@ -1,9 +1,11 @@
 package fr.bonobo.phonezen.ui.screens
 
+import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -20,7 +22,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import fr.bonobo.phonezen.ui.theme.*
 import fr.bonobo.phonezen.viewmodel.MainViewModel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WhitelistScreen(vm: MainViewModel, onBack: () -> Unit = {}) {
     val c           = LocalColors.current
@@ -29,7 +34,28 @@ fun WhitelistScreen(vm: MainViewModel, onBack: () -> Unit = {}) {
     var inputNumber by remember { mutableStateOf("") }
     var errorMsg    by remember { mutableStateOf<String?>(null) }
 
+    // ── Snackbar pour confirmer l'ajout depuis une notification ──
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    val listState      = rememberLazyListState()
+    val coroutineScope = rememberCoroutineScope()
+
     val numberToName = remember(contacts) { vm.buildNumberToNameMap() }
+
+    // Taille précédente de la whitelist pour détecter un ajout externe (depuis notification)
+    var prevSize by remember { mutableIntStateOf(whitelist.size) }
+    LaunchedEffect(whitelist.size) {
+        if (whitelist.size > prevSize) {
+            // Un numéro a été ajouté depuis l'extérieur (notification "Ne plus bloquer")
+            coroutineScope.launch {
+                snackbarHostState.showSnackbar(
+                    message  = "✅ Numéro ajouté à la liste blanche",
+                    duration = SnackbarDuration.Short
+                )
+            }
+        }
+        prevSize = whitelist.size
+    }
 
     fun tryAdd() {
         val cleaned = inputNumber.replace(Regex("[\\s.\\-()]"), "")
@@ -37,115 +63,142 @@ fun WhitelistScreen(vm: MainViewModel, onBack: () -> Unit = {}) {
             cleaned.isEmpty()           -> errorMsg = "Entrez un numéro"
             cleaned.length < 6          -> errorMsg = "Numéro trop court"
             whitelist.contains(cleaned) -> errorMsg = "Déjà dans la liste blanche"
-            else -> { vm.addToWhitelist(cleaned); inputNumber = ""; errorMsg = null }
+            else -> {
+                vm.addToWhitelist(cleaned)
+                inputNumber = ""
+                errorMsg = null
+                coroutineScope.launch {
+                    listState.animateScrollToItem(whitelist.size)
+                }
+            }
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize().background(c.background)) {
+    Scaffold(
+        containerColor  = c.background,
+        snackbarHost    = { SnackbarHost(snackbarHostState) }
+    ) { paddingValues ->
+        Column(modifier = Modifier.fillMaxSize().background(c.background)) {
 
-        // ── TopBar ──
-        Row(
-            modifier          = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 38.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onClick = onBack) {
-                Icon(Icons.Default.ArrowBack, null, tint = c.neonCyan)
-            }
-            Text(
-                text       = "Liste blanche",
-                fontSize   = 22.sp,
-                fontWeight = FontWeight.Bold,
-                color      = c.neonCyan,
-                modifier   = Modifier.padding(start = 4.dp)
-            )
-        }
-
-        // ── Champ d'ajout manuel ──
-        Card(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-            shape    = RoundedCornerShape(12.dp),
-            colors   = CardDefaults.cardColors(containerColor = c.surfaceVar)
-        ) {
-            Column(modifier = Modifier.padding(12.dp)) {
+            // ── TopBar ──
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(paddingValues)
+                    .padding(horizontal = 8.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.Default.ArrowBack, null, tint = c.neonCyan)
+                }
                 Text(
-                    "Ajouter un numéro manuellement",
-                    fontSize   = 13.sp,
+                    text       = "Liste blanche",
+                    fontSize   = 22.sp,
                     fontWeight = FontWeight.Bold,
                     color      = c.neonCyan,
-                    modifier   = Modifier.padding(bottom = 8.dp)
+                    modifier   = Modifier.padding(start = 4.dp)
                 )
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    OutlinedTextField(
-                        value           = inputNumber,
-                        onValueChange   = { inputNumber = it; errorMsg = null },
-                        placeholder     = { Text("Ex: 0612345678", color = c.textSecond) },
-                        singleLine      = true,
-                        modifier        = Modifier.weight(1f),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone, imeAction = ImeAction.Done),
-                        keyboardActions = KeyboardActions(onDone = { tryAdd() }),
-                        isError         = errorMsg != null,
-                        colors          = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor   = c.neonCyan,
-                            unfocusedBorderColor = c.glassStroke,
-                            focusedTextColor     = c.textPrimary,
-                            unfocusedTextColor   = c.textPrimary,
-                            errorBorderColor     = MaterialTheme.colorScheme.error,
-                            cursorColor          = c.neonCyan
-                        )
+            }
+
+            // ── Champ d'ajout manuel ──
+            Card(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                shape    = RoundedCornerShape(12.dp),
+                colors   = CardDefaults.cardColors(containerColor = c.surfaceVar)
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Text(
+                        "Ajouter un numéro manuellement",
+                        fontSize   = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color      = c.neonCyan,
+                        modifier   = Modifier.padding(bottom = 8.dp)
                     )
-                    Spacer(Modifier.width(8.dp))
-                    IconButton(
-                        onClick  = { tryAdd() },
-                        modifier = Modifier.background(c.neonCyan, RoundedCornerShape(8.dp)).size(48.dp)
-                    ) {
-                        Icon(Icons.Default.Add, null, tint = c.background)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        OutlinedTextField(
+                            value           = inputNumber,
+                            onValueChange   = { inputNumber = it; errorMsg = null },
+                            placeholder     = { Text("Ex: 0612345678", color = c.textSecond) },
+                            singleLine      = true,
+                            modifier        = Modifier.weight(1f),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone, imeAction = ImeAction.Done),
+                            keyboardActions = KeyboardActions(onDone = { tryAdd() }),
+                            isError         = errorMsg != null,
+                            colors          = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor   = c.neonCyan,
+                                unfocusedBorderColor = c.glassStroke,
+                                focusedTextColor     = c.textPrimary,
+                                unfocusedTextColor   = c.textPrimary,
+                                errorBorderColor     = MaterialTheme.colorScheme.error,
+                                cursorColor          = c.neonCyan
+                            )
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        IconButton(
+                            onClick  = { tryAdd() },
+                            modifier = Modifier.background(c.neonCyan, RoundedCornerShape(8.dp)).size(48.dp)
+                        ) {
+                            Icon(Icons.Default.Add, null, tint = c.background)
+                        }
+                    }
+                    if (errorMsg != null) {
+                        Text(errorMsg!!, fontSize = 12.sp, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 4.dp))
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Info, null, tint = c.textSecond.copy(alpha = 0.6f), modifier = Modifier.size(14.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            "Vous pouvez aussi utiliser l'icône 🛡 depuis l'onglet Contacts",
+                            fontSize = 11.sp,
+                            color    = c.textSecond.copy(alpha = 0.6f)
+                        )
                     }
                 }
-                if (errorMsg != null) {
-                    Text(errorMsg!!, fontSize = 12.sp, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 4.dp))
-                }
-                Spacer(Modifier.height(8.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Info, null, tint = c.textSecond.copy(alpha = 0.6f), modifier = Modifier.size(14.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text(
-                        "Vous pouvez aussi utiliser l'icône 🛡 depuis l'onglet Contacts",
-                        fontSize = 11.sp,
-                        color    = c.textSecond.copy(alpha = 0.6f)
-                    )
-                }
             }
-        }
 
-        // ── Liste vide ──
-        if (whitelist.isEmpty()) {
-            Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(Icons.Default.PlaylistAddCheck, null, tint = c.neonCyan.copy(alpha = 0.3f), modifier = Modifier.size(64.dp))
-                    Spacer(Modifier.height(12.dp))
-                    Text("Liste blanche vide", fontSize = 16.sp, color = c.textSecond, fontWeight = FontWeight.Medium)
-                    Text(
-                        "Les numéros ajoutés ici ne seront\njamais bloqués par PhoneZen",
-                        fontSize = 13.sp,
-                        color    = c.textSecond.copy(alpha = 0.7f),
-                        modifier = Modifier.padding(top = 4.dp)
-                    )
+            // ── Liste ──
+            if (whitelist.isEmpty()) {
+                Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(Icons.Default.PlaylistAddCheck, null, tint = c.neonCyan.copy(alpha = 0.3f), modifier = Modifier.size(64.dp))
+                        Spacer(Modifier.height(12.dp))
+                        Text("Liste blanche vide", fontSize = 16.sp, color = c.textSecond, fontWeight = FontWeight.Medium)
+                        Text(
+                            "Les numéros ajoutés ici ne seront\njamais bloqués par PhoneZen",
+                            fontSize = 13.sp,
+                            color    = c.textSecond.copy(alpha = 0.7f),
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
+                    }
                 }
-            }
-        } else {
-            Text(
-                "${whitelist.size} numéro(s) protégé(s)",
-                fontSize = 12.sp,
-                color    = c.textSecond,
-                modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 4.dp)
-            )
-            LazyColumn(
-                modifier            = Modifier.fillMaxSize(),
-                contentPadding      = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                items(whitelist.toList().sorted()) { number ->
-                    WhitelistEntry(number = number, contactName = numberToName[number], onRemove = { vm.removeFromWhitelist(number) })
+            } else {
+                Text(
+                    "${whitelist.size} numéro(s) protégé(s)",
+                    fontSize = 12.sp,
+                    color    = c.textSecond,
+                    modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 4.dp)
+                )
+
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .windowInsetsPadding(WindowInsets.navigationBars),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    items(whitelist.toList().sorted()) { number ->
+                        WhitelistEntry(
+                            number      = number,
+                            contactName = numberToName[number],
+                            onRemove    = { vm.removeFromWhitelist(number) }
+                        )
+                    }
+
+                    item {
+                        Spacer(modifier = Modifier.height(80.dp))
+                    }
                 }
             }
         }
