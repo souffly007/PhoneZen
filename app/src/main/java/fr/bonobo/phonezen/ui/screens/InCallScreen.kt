@@ -10,6 +10,9 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.Bluetooth
+import androidx.compose.material.icons.outlined.Headset
+import androidx.compose.material.icons.outlined.VolumeUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -196,13 +199,25 @@ fun InCallScreen(vm: InCallViewModel, onFinish: () -> Unit) {
                             ) { showDialpad = true }
                         }
                         item {
+                            val audioIcon = when {
+                                state.isBluetooth -> Icons.Default.Bluetooth
+                                state.isWired     -> Icons.Default.Headset
+                                state.isSpeaker   -> Icons.Default.VolumeUp
+                                else              -> Icons.Default.VolumeDown
+                            }
+                            val audioLabel = when {
+                                state.isBluetooth -> "Bluetooth"
+                                state.isWired     -> "Casque"
+                                state.isSpeaker   -> "Haut-parleur"
+                                else              -> "Audio"
+                            }
                             ControlCircleBtn(
-                                icon      = if (state.isSpeaker) Icons.Default.VolumeUp else Icons.Default.VolumeDown,
-                                label     = "Haut-parleur",
-                                isToggled = state.isSpeaker,
-                                activeColor = neonGreen
+                                icon      = audioIcon,
+                                label     = audioLabel,
+                                isToggled = state.isSpeaker || state.isBluetooth || state.isWired,
+                                activeColor = if (state.isBluetooth) neonCyan else neonGreen
                             ) {
-                                vm.toggleSpeaker()
+                                vm.toggleAudioRoute()
                             }
                         }
                         item {

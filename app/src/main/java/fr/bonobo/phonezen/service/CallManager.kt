@@ -38,9 +38,10 @@ object CallManager {
     private val listeners      = mutableListOf<(Call?, CallStatus) -> Unit>()
     private val audioListeners = mutableListOf<(Boolean, Boolean, Int) -> Unit>()
 
-    private var isMuted    : Boolean = false
-    private var isOnHold   : Boolean = false
-    private var audioRoute : Int     = CallAudioState.ROUTE_EARPIECE
+    private var isMuted          : Boolean = false
+    private var isOnHold         : Boolean = false
+    private var audioRoute       : Int     = CallAudioState.ROUTE_EARPIECE
+    private var supportedRoutes  : Int     = CallAudioState.ROUTE_EARPIECE
 
     private var lastToggleTime = 0L
 
@@ -104,9 +105,10 @@ object CallManager {
     @Synchronized
     fun onAudioStateChanged(state: CallAudioState?) {
         if (state != null) {
-            isMuted    = state.isMuted
-            audioRoute = state.route
-            Log.d(TAG, "onAudioStateChanged: isMuted=$isMuted, route=$audioRoute")
+            isMuted         = state.isMuted
+            audioRoute      = state.route
+            supportedRoutes = state.supportedRouteMask
+            Log.d(TAG, "onAudioStateChanged: isMuted=$isMuted, route=$audioRoute, supported=$supportedRoutes")
             notifyAudio()
         }
     }
@@ -197,6 +199,11 @@ object CallManager {
         if (!audioListeners.contains(l)) audioListeners.add(l)
         l(isMuted, isOnHold, audioRoute)
     }
+
+    /** Version étendue pour inclure les routes supportées si besoin */
+    fun addExtendedAudioListener(l: (Boolean, Boolean, Int, Int) -> Unit) {
+        l(isMuted, isOnHold, audioRoute, supportedRoutes)
+    }
     fun removeAudioListener(l: (Boolean, Boolean, Int) -> Unit) = audioListeners.remove(l)
 
     // -----------------------------------------------------------------------
@@ -254,34 +261,43 @@ object CallManager {
         Log.d(TAG, "toggleMute: $nextMute")
     }
 
-    fun toggleSpeaker() {
+    /**
+     * Alterne entre les routes audio disponibles.
+     * Priorité : Bluetooth > Haut-parleur > Écouteur/Casque
+     */
+    fun cycleAudioRoute() {
         val now = System.currentTimeMillis()
-        if (now - lastToggleTime < 500) {
-            Log.d(TAG, "toggleSpeaker ignoré (trop rapide)")
-            return
-        }
+        if (now - lastToggleTime < 500) return
         lastToggleTime = now
 
-        val service = inCallService ?: run {
-            Log.e(TAG, "toggleSpeaker: inCallService null")
-            return
-        }
-        if (getAudioState() == null) {
-            Log.e(TAG, "toggleSpeaker: audioState null")
-            return
+        val service = inCallService ?: return
+        val state   = getAudioState() ?: return
+        val mask    = state.supportedRouteMask
+
+        val newRoute = when (audioRoute) {
+            CallAudioState.ROUTE_EARPIECE, CallAudioState.ROUTE_WIRED_HEADSET -> {
+                if (mask and CallAudioState.ROUTE_BLUETOOTH != 0) CallAudioState.ROUTE_BLUETOOTH
+                else if (mask and CallAudioState.ROUTE_SPEAKER != 0) CallAudioState.ROUTE_SPEAKER
+                else audioRoute
+            }
+            CallAudioState.ROUTE_BLUETOOTH -> {
+                if (mask and CallAudioState.ROUTE_SPEAKER != 0) CallAudioState.ROUTE_SPEAKER
+                else CallAudioState.ROUTE_EARPIECE
+            }
+            CallAudioState.ROUTE_SPEAKER -> {
+                if (mask and CallAudioState.ROUTE_EARPIECE != 0) CallAudioState.ROUTE_EARPIECE
+                else if (mask and CallAudioState.ROUTE_WIRED_HEADSET != 0) CallAudioState.ROUTE_WIRED_HEADSET
+                else audioRoute
+            }
+            else -> CallAudioState.ROUTE_EARPIECE
         }
 
-        val newRoute = if (audioRoute == CallAudioState.ROUTE_SPEAKER) {
-            Log.d(TAG, "toggleSpeaker: → écouteur")
-            CallAudioState.ROUTE_EARPIECE
-        } else {
-            Log.d(TAG, "toggleSpeaker: → haut-parleur")
-            CallAudioState.ROUTE_SPEAKER
-        }
-
+        Log.d(TAG, "cycleAudioRoute: $audioRoute -> $newRoute (mask: $mask)")
         service.setAudioRoute(newRoute)
-        audioRoute = newRoute
-        notifyAudio()
+    }
+
+    fun toggleSpeaker() {
+        cycleAudioRoute()
     }
 
     // -----------------------------------------------------------------------

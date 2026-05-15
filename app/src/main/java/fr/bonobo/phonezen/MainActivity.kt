@@ -54,10 +54,15 @@ class MainActivity : ComponentActivity() {
         Manifest.permission.ANSWER_PHONE_CALLS,
         Manifest.permission.RECEIVE_SMS,
         Manifest.permission.READ_SMS,
-        Manifest.permission.VIBRATE
+        Manifest.permission.VIBRATE,
+        Manifest.permission.BLUETOOTH,
+        Manifest.permission.MODIFY_AUDIO_SETTINGS
     ).apply {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             add(Manifest.permission.POST_NOTIFICATIONS)
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            add(Manifest.permission.BLUETOOTH_CONNECT)
         }
     }.toTypedArray()
 
