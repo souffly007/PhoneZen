@@ -1,4 +1,4 @@
-package fr.bonobo.phonezen.util
+package fr.bonobo.phonezen.utils
 
 import android.annotation.SuppressLint
 import android.content.Context

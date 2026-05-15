@@ -199,11 +199,6 @@ object CallManager {
         if (!audioListeners.contains(l)) audioListeners.add(l)
         l(isMuted, isOnHold, audioRoute)
     }
-
-    /** Version étendue pour inclure les routes supportées si besoin */
-    fun addExtendedAudioListener(l: (Boolean, Boolean, Int, Int) -> Unit) {
-        l(isMuted, isOnHold, audioRoute, supportedRoutes)
-    }
     fun removeAudioListener(l: (Boolean, Boolean, Int) -> Unit) = audioListeners.remove(l)
 
     // -----------------------------------------------------------------------
