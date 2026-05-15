@@ -39,9 +39,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import fr.bonobo.phonezen.data.model.Contact
 import fr.bonobo.phonezen.ui.theme.*
-import fr.bonobo.phonezen.util.SimInfo
-import fr.bonobo.phonezen.util.VoiceDialHelper
-import fr.bonobo.phonezen.util.getActiveSims
+import fr.bonobo.phonezen.utils.SimInfo
+import fr.bonobo.phonezen.utils.VoiceDialHelper
+import fr.bonobo.phonezen.utils.getActiveSims
 import fr.bonobo.phonezen.viewmodel.MainViewModel
 
 data class Key(val main: String, val sub: String = "")

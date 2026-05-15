@@ -179,12 +179,8 @@ class InCallViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun toggleMute()    = CallManager.toggleMute()
-    fun toggleSpeaker() {
-        Log.d(TAG, "toggleSpeaker — cycle audio route")
-        CallManager.cycleAudioRoute()
-    }
-
     fun toggleAudioRoute() {
+        Log.d(TAG, "toggleAudioRoute — cycle audio route")
         CallManager.cycleAudioRoute()
     }
 
