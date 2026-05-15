@@ -10,6 +10,8 @@ data class CallState(
     val durationSec: Long = 0,
     val isMuted: Boolean = false,
     val isSpeaker: Boolean = false,
+    val isBluetooth: Boolean = false,
+    val isWired: Boolean = false,
     val isOnHold: Boolean = false,
     val isSpam: Boolean = false,
     val spamReason: String? = null

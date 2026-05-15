@@ -108,15 +108,20 @@ class InCallViewModel(app: Application) : AndroidViewModel(app) {
 
     // AudioListener — source de vérité pour le son
     private val audioListener: (Boolean, Boolean, Int) -> Unit = { muted, onHold, route ->
-        val isSpeaker = route == CallAudioState.ROUTE_SPEAKER
+        val isSpeaker   = route == CallAudioState.ROUTE_SPEAKER
+        val isBluetooth = route == CallAudioState.ROUTE_BLUETOOTH
+        val isWired     = route == CallAudioState.ROUTE_WIRED_HEADSET
+
         _state.update {
             it.copy(
-                isMuted   = muted,
-                isOnHold  = onHold,
-                isSpeaker = isSpeaker
+                isMuted     = muted,
+                isOnHold    = onHold,
+                isSpeaker   = isSpeaker,
+                isBluetooth = isBluetooth,
+                isWired     = isWired
             )
         }
-        Log.d(TAG, "audioListener — isSpeaker=$isSpeaker isMuted=$muted isOnHold=$onHold")
+        Log.d(TAG, "audioListener — route=$route isSpeaker=$isSpeaker isBluetooth=$isBluetooth isMuted=$muted")
     }
 
     // ─────────────────────────────────────────────
@@ -175,8 +180,12 @@ class InCallViewModel(app: Application) : AndroidViewModel(app) {
 
     fun toggleMute()    = CallManager.toggleMute()
     fun toggleSpeaker() {
-        Log.d(TAG, "toggleSpeaker — appel simple")
-        CallManager.toggleSpeaker()
+        Log.d(TAG, "toggleSpeaker — cycle audio route")
+        CallManager.cycleAudioRoute()
+    }
+
+    fun toggleAudioRoute() {
+        CallManager.cycleAudioRoute()
     }
 
     fun toggleHold()    = CallManager.hold(!_state.value.isOnHold)
@@ -206,13 +215,16 @@ class InCallViewModel(app: Application) : AndroidViewModel(app) {
     // ─────────────────────────────────────────────
     private fun resetAudio() {
         try {
-            audioManager.mode = AudioManager.MODE_NORMAL
-            audioManager.isSpeakerphoneOn = false
-            if (audioManager.isBluetoothScoOn) {
-                audioManager.isBluetoothScoOn = false
-                audioManager.stopBluetoothSco()
+            // On laisse InCallService gérer le mode audio et le Bluetooth SCO.
+            // On se contente de remettre l'UI à un état neutre.
+            _state.update {
+                it.copy(
+                    isSpeaker   = false,
+                    isBluetooth = false,
+                    isWired     = false,
+                    isMuted     = false
+                )
             }
-            _state.update { it.copy(isSpeaker = false, isMuted = false) }
         } catch (e: Exception) {
             Log.e(TAG, "resetAudio error: ${e.message}")
         }
