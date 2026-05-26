@@ -40,6 +40,7 @@ object CallManager {
 
     private var isMuted          : Boolean = false
     private var isOnHold         : Boolean = false
+    private var hasHoldCall      : Boolean = false
     private var audioRoute       : Int     = CallAudioState.ROUTE_EARPIECE
     private var supportedRoutes  : Int     = CallAudioState.ROUTE_EARPIECE
 
@@ -48,16 +49,17 @@ object CallManager {
     // -----------------------------------------------------------------------
     // Résolution de l'appel « courant »
     //
-    // Priorité : ACTIVE > HOLDING > DIALING/CONNECTING > RINGING
-    // C'est toujours sur cet appel que les actions (hangUp, hold…) s'exercent.
+    // Priorité : RINGING > ACTIVE > DIALING/CONNECTING > HOLDING
+    // On donne la priorité à l'appel entrant pour qu'il s'affiche par dessus
+    // un appel déjà en cours (double appel).
     // -----------------------------------------------------------------------
     private fun resolveCurrentCall(): Call? =
-        calls.values.firstOrNull { it.state == Call.STATE_ACTIVE }
-            ?: calls.values.firstOrNull { it.state == Call.STATE_HOLDING }
+        calls.values.firstOrNull { it.state == Call.STATE_RINGING }
+            ?: calls.values.firstOrNull { it.state == Call.STATE_ACTIVE }
             ?: calls.values.firstOrNull {
                 it.state == Call.STATE_DIALING || it.state == Call.STATE_CONNECTING
             }
-            ?: calls.values.firstOrNull { it.state == Call.STATE_RINGING }
+            ?: calls.values.firstOrNull { it.state == Call.STATE_HOLDING }
 
     private fun callKey(call: Call): String =
         System.identityHashCode(call).toString()
@@ -199,6 +201,11 @@ object CallManager {
         if (!audioListeners.contains(l)) audioListeners.add(l)
         l(isMuted, isOnHold, audioRoute)
     }
+
+    /** Version avec info double appel */
+    fun addAdvancedAudioListener(l: (Boolean, Boolean, Boolean, Int) -> Unit) {
+        l(isMuted, isOnHold, hasHoldCall, audioRoute)
+    }
     fun removeAudioListener(l: (Boolean, Boolean, Int) -> Unit) = audioListeners.remove(l)
 
     // -----------------------------------------------------------------------
@@ -248,6 +255,21 @@ object CallManager {
 
     fun hold(on: Boolean) {
         if (on) resolveCurrentCall()?.hold() else resolveCurrentCall()?.unhold()
+    }
+
+    /** Permute l'appel actif et l'appel en attente */
+    fun swapCalls() {
+        val active = calls.values.find { it.state == Call.STATE_ACTIVE }
+        val held   = calls.values.find { it.state == Call.STATE_HOLDING }
+
+        if (active != null && held != null) {
+            Log.d(TAG, "swapCalls: active -> hold, held -> active")
+            active.hold()
+            held.unhold()
+        } else if (held != null) {
+            Log.d(TAG, "swapCalls: held -> active (seul appel restant)")
+            held.unhold()
+        }
     }
 
     fun toggleMute() {
@@ -330,11 +352,14 @@ object CallManager {
 
     /**
      * isOnHold = vrai si aucun appel n'est ACTIVE mais au moins un est HOLDING.
+     * hasHoldCall = vrai si au moins un appel est en attente (indépendamment de l'appel actif).
      * Recalculé à chaque changement d'état.
      */
     private fun refreshHoldState() {
-        isOnHold = calls.values.none { it.state == Call.STATE_ACTIVE } &&
-                calls.values.any  { it.state == Call.STATE_HOLDING }
+        val states = calls.values.map { it.state }
+        isOnHold = states.none { it == Call.STATE_ACTIVE } &&
+                   states.any  { it == Call.STATE_HOLDING }
+        hasHoldCall = states.any { it == Call.STATE_HOLDING }
     }
 
     private fun notify(call: Call?, status: CallStatus) =
