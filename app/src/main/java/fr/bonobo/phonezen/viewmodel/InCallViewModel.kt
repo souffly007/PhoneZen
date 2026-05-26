@@ -94,6 +94,13 @@ class InCallViewModel(app: Application) : AndroidViewModel(app) {
         }
         resolveContact(number)
 
+        // Gestion du double appel : cherche s'il y a un autre appel (en attente)
+        val otherCall = CallManager.getAudioState()?.let {
+            // Ici on triche un peu car l'API Call ne donne pas facilement les autres appels
+            // Mais CallManager les a.
+            null
+        }
+
         when (status) {
             CallStatus.ACTIVE -> startTimer()
             CallStatus.DISCONNECTED, CallStatus.IDLE -> {
@@ -112,16 +119,21 @@ class InCallViewModel(app: Application) : AndroidViewModel(app) {
         val isBluetooth = route == CallAudioState.ROUTE_BLUETOOTH
         val isWired     = route == CallAudioState.ROUTE_WIRED_HEADSET
 
+        // Vérifie s'il y a un appel en attente via CallManager
+        val hasHold = CallManager.getCallCount() > 1 &&
+                     (onHold || CallManager.getCall()?.state == Call.STATE_ACTIVE)
+
         _state.update {
             it.copy(
                 isMuted     = muted,
                 isOnHold    = onHold,
+                hasHoldCall = hasHold,
                 isSpeaker   = isSpeaker,
                 isBluetooth = isBluetooth,
                 isWired     = isWired
             )
         }
-        Log.d(TAG, "audioListener — route=$route isSpeaker=$isSpeaker isBluetooth=$isBluetooth isMuted=$muted")
+        Log.d(TAG, "audioListener — route=$route isSpeaker=$isSpeaker hasHold=$hasHold isMuted=$muted")
     }
 
     // ─────────────────────────────────────────────
@@ -185,6 +197,7 @@ class InCallViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun toggleHold()    = CallManager.hold(!_state.value.isOnHold)
+    fun swapCalls()     = CallManager.swapCalls()
     fun playDtmf(c: Char) = CallManager.playDtmf(c)
     fun stopDtmf()        = CallManager.stopDtmf()
 

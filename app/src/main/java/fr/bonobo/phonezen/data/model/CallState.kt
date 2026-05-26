@@ -13,6 +13,8 @@ data class CallState(
     val isBluetooth: Boolean = false,
     val isWired: Boolean = false,
     val isOnHold: Boolean = false,
+    val hasHoldCall: Boolean = false,
+    val otherCallName: String? = null,
     val isSpam: Boolean = false,
     val spamReason: String? = null
 )
