@@ -32,11 +32,23 @@ import fr.bonobo.phonezen.ui.screens.InCallActivity
 import fr.bonobo.phonezen.service.VoicemailListener
 import fr.bonobo.phonezen.utils.VoicemailNotificationHelper
 
+import fr.bonobo.phonezen.data.model.CallStatus
+import android.telecom.Call
+import fr.bonobo.phonezen.service.CallManager
+
 class MainActivity : ComponentActivity() {
 
     private val vm: MainViewModel by viewModels()
     private val themeVm: ThemeViewModel by viewModels()
     private var rolesRequested = false
+
+    // Listener pour masquer l'UI principale dès qu'un appel sortant démarre
+    private val callListener: (Call?, CallStatus) -> Unit = { _, status ->
+        if (status == CallStatus.DIALING) {
+            Log.d("MainActivity", "Statut DIALING détecté → masquage de l'UI principale")
+            moveTaskToBack(true)
+        }
+    }
 
     // ── États onboarding (Compose observe ces variables) ──
     private var isDialerGranted    by mutableStateOf(false)
@@ -54,10 +66,15 @@ class MainActivity : ComponentActivity() {
         Manifest.permission.ANSWER_PHONE_CALLS,
         Manifest.permission.RECEIVE_SMS,
         Manifest.permission.READ_SMS,
-        Manifest.permission.VIBRATE
+        Manifest.permission.VIBRATE,
+        Manifest.permission.BLUETOOTH,
+        Manifest.permission.MODIFY_AUDIO_SETTINGS
     ).apply {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             add(Manifest.permission.POST_NOTIFICATIONS)
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            add(Manifest.permission.BLUETOOTH_CONNECT)
         }
     }.toTypedArray()
 
@@ -108,6 +125,16 @@ class MainActivity : ComponentActivity() {
 
         checkPermissions()
         handleDialIntent(intent)
+    }
+
+    override fun onStart() {
+        super.onStart()
+        CallManager.addListener(callListener)
+    }
+
+    override fun onStop() {
+        super.onStop()
+        CallManager.removeListener(callListener)
     }
 
     override fun onResume() {
@@ -166,6 +193,8 @@ class MainActivity : ComponentActivity() {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             startActivity(intent)
+            // Masque immédiatement l'UI principale pour éviter l'effet de gel
+            moveTaskToBack(true)
         } catch (e: SecurityException) {
             Log.e("MainActivity", "Permission CALL_PHONE manquante, ouverture du dialer")
             startActivity(Intent(Intent.ACTION_DIAL).apply {
@@ -201,6 +230,8 @@ class MainActivity : ComponentActivity() {
                     putExtra(TelecomManager.EXTRA_PHONE_ACCOUNT_HANDLE, phoneAccountHandle)
                 }
                 startActivity(intent)
+                // Masque immédiatement l'UI principale pour éviter l'effet de gel
+                moveTaskToBack(true)
                 Log.d("MainActivity", "Appel via SIM $subscriptionId lancé")
             } else {
                 Log.w("MainActivity", "PhoneAccountHandle non trouvé pour SIM $subscriptionId")

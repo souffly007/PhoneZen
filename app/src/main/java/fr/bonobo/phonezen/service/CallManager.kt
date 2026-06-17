@@ -38,25 +38,28 @@ object CallManager {
     private val listeners      = mutableListOf<(Call?, CallStatus) -> Unit>()
     private val audioListeners = mutableListOf<(Boolean, Boolean, Int) -> Unit>()
 
-    private var isMuted    : Boolean = false
-    private var isOnHold   : Boolean = false
-    private var audioRoute : Int     = CallAudioState.ROUTE_EARPIECE
+    private var isMuted          : Boolean = false
+    private var isOnHold         : Boolean = false
+    private var hasHoldCall      : Boolean = false
+    private var audioRoute       : Int     = CallAudioState.ROUTE_EARPIECE
+    private var supportedRoutes  : Int     = CallAudioState.ROUTE_EARPIECE
 
     private var lastToggleTime = 0L
 
     // -----------------------------------------------------------------------
     // Résolution de l'appel « courant »
     //
-    // Priorité : ACTIVE > HOLDING > DIALING/CONNECTING > RINGING
-    // C'est toujours sur cet appel que les actions (hangUp, hold…) s'exercent.
+    // Priorité : RINGING > ACTIVE > DIALING/CONNECTING > HOLDING
+    // On donne la priorité à l'appel entrant pour qu'il s'affiche par dessus
+    // un appel déjà en cours (double appel).
     // -----------------------------------------------------------------------
     private fun resolveCurrentCall(): Call? =
-        calls.values.firstOrNull { it.state == Call.STATE_ACTIVE }
-            ?: calls.values.firstOrNull { it.state == Call.STATE_HOLDING }
+        calls.values.firstOrNull { it.state == Call.STATE_RINGING }
+            ?: calls.values.firstOrNull { it.state == Call.STATE_ACTIVE }
             ?: calls.values.firstOrNull {
                 it.state == Call.STATE_DIALING || it.state == Call.STATE_CONNECTING
             }
-            ?: calls.values.firstOrNull { it.state == Call.STATE_RINGING }
+            ?: calls.values.firstOrNull { it.state == Call.STATE_HOLDING }
 
     private fun callKey(call: Call): String =
         System.identityHashCode(call).toString()
@@ -104,9 +107,10 @@ object CallManager {
     @Synchronized
     fun onAudioStateChanged(state: CallAudioState?) {
         if (state != null) {
-            isMuted    = state.isMuted
-            audioRoute = state.route
-            Log.d(TAG, "onAudioStateChanged: isMuted=$isMuted, route=$audioRoute")
+            isMuted         = state.isMuted
+            audioRoute      = state.route
+            supportedRoutes = state.supportedRouteMask
+            Log.d(TAG, "onAudioStateChanged: isMuted=$isMuted, route=$audioRoute, supported=$supportedRoutes")
             notifyAudio()
         }
     }
@@ -197,6 +201,11 @@ object CallManager {
         if (!audioListeners.contains(l)) audioListeners.add(l)
         l(isMuted, isOnHold, audioRoute)
     }
+
+    /** Version avec info double appel */
+    fun addAdvancedAudioListener(l: (Boolean, Boolean, Boolean, Int) -> Unit) {
+        l(isMuted, isOnHold, hasHoldCall, audioRoute)
+    }
     fun removeAudioListener(l: (Boolean, Boolean, Int) -> Unit) = audioListeners.remove(l)
 
     // -----------------------------------------------------------------------
@@ -248,40 +257,64 @@ object CallManager {
         if (on) resolveCurrentCall()?.hold() else resolveCurrentCall()?.unhold()
     }
 
+    /** Permute l'appel actif et l'appel en attente */
+    fun swapCalls() {
+        val active = calls.values.find { it.state == Call.STATE_ACTIVE }
+        val held   = calls.values.find { it.state == Call.STATE_HOLDING }
+
+        if (active != null && held != null) {
+            Log.d(TAG, "swapCalls: active -> hold, held -> active")
+            active.hold()
+            held.unhold()
+        } else if (held != null) {
+            Log.d(TAG, "swapCalls: held -> active (seul appel restant)")
+            held.unhold()
+        }
+    }
+
     fun toggleMute() {
         val nextMute = !isMuted
         inCallService?.setMuted(nextMute)
         Log.d(TAG, "toggleMute: $nextMute")
     }
 
-    fun toggleSpeaker() {
+    /**
+     * Alterne entre les routes audio disponibles.
+     * Priorité : Bluetooth > Haut-parleur > Écouteur/Casque
+     */
+    fun cycleAudioRoute() {
         val now = System.currentTimeMillis()
-        if (now - lastToggleTime < 500) {
-            Log.d(TAG, "toggleSpeaker ignoré (trop rapide)")
-            return
-        }
+        if (now - lastToggleTime < 500) return
         lastToggleTime = now
 
-        val service = inCallService ?: run {
-            Log.e(TAG, "toggleSpeaker: inCallService null")
-            return
-        }
-        if (getAudioState() == null) {
-            Log.e(TAG, "toggleSpeaker: audioState null")
-            return
+        val service = inCallService ?: return
+        val state   = getAudioState() ?: return
+        val mask    = state.supportedRouteMask
+
+        val newRoute = when (audioRoute) {
+            CallAudioState.ROUTE_EARPIECE, CallAudioState.ROUTE_WIRED_HEADSET -> {
+                if (mask and CallAudioState.ROUTE_BLUETOOTH != 0) CallAudioState.ROUTE_BLUETOOTH
+                else if (mask and CallAudioState.ROUTE_SPEAKER != 0) CallAudioState.ROUTE_SPEAKER
+                else audioRoute
+            }
+            CallAudioState.ROUTE_BLUETOOTH -> {
+                if (mask and CallAudioState.ROUTE_SPEAKER != 0) CallAudioState.ROUTE_SPEAKER
+                else CallAudioState.ROUTE_EARPIECE
+            }
+            CallAudioState.ROUTE_SPEAKER -> {
+                if (mask and CallAudioState.ROUTE_EARPIECE != 0) CallAudioState.ROUTE_EARPIECE
+                else if (mask and CallAudioState.ROUTE_WIRED_HEADSET != 0) CallAudioState.ROUTE_WIRED_HEADSET
+                else audioRoute
+            }
+            else -> CallAudioState.ROUTE_EARPIECE
         }
 
-        val newRoute = if (audioRoute == CallAudioState.ROUTE_SPEAKER) {
-            Log.d(TAG, "toggleSpeaker: → écouteur")
-            CallAudioState.ROUTE_EARPIECE
-        } else {
-            Log.d(TAG, "toggleSpeaker: → haut-parleur")
-            CallAudioState.ROUTE_SPEAKER
-        }
-
+        Log.d(TAG, "cycleAudioRoute: $audioRoute -> $newRoute (mask: $mask)")
         service.setAudioRoute(newRoute)
-        audioRoute = newRoute
-        notifyAudio()
+    }
+
+    fun toggleSpeaker() {
+        cycleAudioRoute()
     }
 
     // -----------------------------------------------------------------------
@@ -319,11 +352,14 @@ object CallManager {
 
     /**
      * isOnHold = vrai si aucun appel n'est ACTIVE mais au moins un est HOLDING.
+     * hasHoldCall = vrai si au moins un appel est en attente (indépendamment de l'appel actif).
      * Recalculé à chaque changement d'état.
      */
     private fun refreshHoldState() {
-        isOnHold = calls.values.none { it.state == Call.STATE_ACTIVE } &&
-                calls.values.any  { it.state == Call.STATE_HOLDING }
+        val states = calls.values.map { it.state }
+        isOnHold = states.none { it == Call.STATE_ACTIVE } &&
+                   states.any  { it == Call.STATE_HOLDING }
+        hasHoldCall = states.any { it == Call.STATE_HOLDING }
     }
 
     private fun notify(call: Call?, status: CallStatus) =

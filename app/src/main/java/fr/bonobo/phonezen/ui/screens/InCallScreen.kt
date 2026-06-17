@@ -157,7 +157,7 @@ fun InCallScreen(vm: InCallViewModel, onFinish: () -> Unit) {
 
             Text(
                 text = when (state.status) {
-                    CallStatus.RINGING      -> "Appel entrant..."
+                    CallStatus.RINGING      -> if (state.hasHoldCall) "Deuxième appel..." else "Appel entrant..."
                     CallStatus.DIALING      -> "Appel en cours..."
                     CallStatus.ACTIVE       -> formatDuration(state.durationSec)
                     CallStatus.DISCONNECTED -> "Appel terminé"
@@ -167,6 +167,23 @@ fun InCallScreen(vm: InCallViewModel, onFinish: () -> Unit) {
                 color    = if (state.status == CallStatus.ACTIVE) neonCyan else Color.LightGray,
                 modifier = Modifier.padding(top = 8.dp)
             )
+
+            if (state.hasHoldCall && state.status == CallStatus.ACTIVE) {
+                Surface(
+                    color = Color.White.copy(alpha = 0.1f),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.padding(top = 16.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.Pause, null, tint = Color.LightGray, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Appel en attente", color = Color.LightGray, fontSize = 14.sp)
+                    }
+                }
+            }
 
             Spacer(Modifier.weight(1f))
 
@@ -196,21 +213,42 @@ fun InCallScreen(vm: InCallViewModel, onFinish: () -> Unit) {
                             ) { showDialpad = true }
                         }
                         item {
+                            val audioIcon = when {
+                                state.isBluetooth -> Icons.Default.Bluetooth
+                                state.isWired     -> Icons.Default.Headset
+                                state.isSpeaker   -> Icons.Default.VolumeUp
+                                else              -> Icons.Default.VolumeDown
+                            }
+                            val audioLabel = when {
+                                state.isBluetooth -> "Bluetooth"
+                                state.isWired     -> "Casque"
+                                state.isSpeaker   -> "Haut-parleur"
+                                else              -> "Audio"
+                            }
                             ControlCircleBtn(
-                                icon      = if (state.isSpeaker) Icons.Default.VolumeUp else Icons.Default.VolumeDown,
-                                label     = "Haut-parleur",
-                                isToggled = state.isSpeaker,
-                                activeColor = neonGreen
+                                icon      = audioIcon,
+                                label     = audioLabel,
+                                isToggled = state.isSpeaker || state.isBluetooth || state.isWired,
+                                activeColor = if (state.isBluetooth) neonCyan else neonGreen
                             ) {
-                                vm.toggleSpeaker()
+                                vm.toggleAudioRoute()
                             }
                         }
                         item {
-                            ControlCircleBtn(
-                                icon      = Icons.Default.Pause,
-                                label     = "Attente",
-                                isToggled = state.isOnHold
-                            ) { vm.toggleHold() }
+                            if (state.hasHoldCall) {
+                                ControlCircleBtn(
+                                    icon  = Icons.Default.SwapCalls,
+                                    label = "Permuter",
+                                    activeColor = neonCyan,
+                                    isToggled = true
+                                ) { vm.swapCalls() }
+                            } else {
+                                ControlCircleBtn(
+                                    icon      = Icons.Default.Pause,
+                                    label     = "Attente",
+                                    isToggled = state.isOnHold
+                                ) { vm.toggleHold() }
+                            }
                         }
                         item {
                             ControlCircleBtn(icon = Icons.Default.Add, label = "Ajouter") {}
