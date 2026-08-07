@@ -9,6 +9,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -18,6 +19,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -30,9 +33,16 @@ import java.util.*
 
 @Composable
 fun ProfileScreen(vm: MainViewModel, onBack: () -> Unit = {}) {
-    val c              = LocalColors.current
-    val activeProfile  by vm.activeProfile.collectAsState()
+    val c             = LocalColors.current
+    val activeProfile by vm.activeProfile.collectAsState()
     val vacationConfig by vm.vacationConfig.collectAsState()
+
+    val workDndEnabled by vm.workDndEnabled.collectAsState()
+    val workDndStart   by vm.workDndStart.collectAsState()
+    val workDndEnd     by vm.workDndEnd.collectAsState()
+    val homeDndEnabled by vm.homeDndEnabled.collectAsState()
+    val homeDndStart   by vm.homeDndStart.collectAsState()
+    val homeDndEnd     by vm.homeDndEnd.collectAsState()
 
     Column(
         modifier = Modifier
@@ -40,7 +50,6 @@ fun ProfileScreen(vm: MainViewModel, onBack: () -> Unit = {}) {
             .background(c.background)
             .verticalScroll(rememberScrollState())
     ) {
-        // ── TopBar ──
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -59,7 +68,6 @@ fun ProfileScreen(vm: MainViewModel, onBack: () -> Unit = {}) {
             )
         }
 
-        // ── Info contexte ──
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -84,7 +92,6 @@ fun ProfileScreen(vm: MainViewModel, onBack: () -> Unit = {}) {
 
         Spacer(Modifier.height(8.dp))
 
-        // ── Les 3 profils ──
         ProfileCard(
             profile  = BlockingProfile.WORK,
             isActive = activeProfile == BlockingProfile.WORK,
@@ -93,6 +100,17 @@ fun ProfileScreen(vm: MainViewModel, onBack: () -> Unit = {}) {
             ProfileDetail("✅ Autorisés",  "Contacts, favoris, numéros 08/09 non-surtaxés")
             ProfileDetail("🚫 Bloqués",    "Démarchage ARCEP, signalements communautaires, masqués")
             ProfileDetail("💡 Idéal pour", "Heures de bureau, attente de rappels professionnels")
+
+            DndNightSection(
+                enabled   = workDndEnabled,
+                startHour = workDndStart,
+                endHour   = workDndEnd,
+                onToggle  = { vm.setWorkDndEnabled(it) },
+                onMinus   = { field -> if (field == "start") vm.setWorkDndStart((workDndStart - 1 + 24) % 24)
+                else vm.setWorkDndEnd((workDndEnd - 1 + 24) % 24) },
+                onPlus    = { field -> if (field == "start") vm.setWorkDndStart((workDndStart + 1) % 24)
+                else vm.setWorkDndEnd((workDndEnd + 1) % 24) }
+            )
         }
 
         ProfileCard(
@@ -103,6 +121,17 @@ fun ProfileScreen(vm: MainViewModel, onBack: () -> Unit = {}) {
             ProfileDetail("✅ Autorisés",  "Contacts et favoris uniquement")
             ProfileDetail("🚫 Bloqués",    "Tout le reste (inconnus, démarchage, pro...)")
             ProfileDetail("💡 Idéal pour", "Soirées et week-ends à la maison")
+
+            DndNightSection(
+                enabled   = homeDndEnabled,
+                startHour = homeDndStart,
+                endHour   = homeDndEnd,
+                onToggle  = { vm.setHomeDndEnabled(it) },
+                onMinus   = { field -> if (field == "start") vm.setHomeDndStart((homeDndStart - 1 + 24) % 24)
+                else vm.setHomeDndEnd((homeDndEnd - 1 + 24) % 24) },
+                onPlus    = { field -> if (field == "start") vm.setHomeDndStart((homeDndStart + 1) % 24)
+                else vm.setHomeDndEnd((homeDndEnd + 1) % 24) }
+            )
         }
 
         ProfileCard(
@@ -123,16 +152,203 @@ fun ProfileScreen(vm: MainViewModel, onBack: () -> Unit = {}) {
             }
         }
 
-        // ── Résumé du profil actif ──
         Spacer(Modifier.height(8.dp))
         ActiveProfileSummary(activeProfile, vacationConfig)
         Spacer(Modifier.height(32.dp))
     }
 }
 
+@Composable
+private fun DndNightSection(
+    enabled   : Boolean,
+    startHour : Int,
+    endHour   : Int,
+    onToggle  : (Boolean) -> Unit,
+    onMinus   : (String) -> Unit,
+    onPlus    : (String) -> Unit
+) {
+    val c = LocalColors.current
+
+    Column(modifier = Modifier.padding(top = 8.dp)) {
+        HorizontalDivider(
+            modifier = Modifier.padding(vertical = 10.dp),
+            color    = c.glassStroke
+        )
+
+        Row(
+            modifier              = Modifier.fillMaxWidth(),
+            verticalAlignment     = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                Icon(Icons.Default.NightlightRound, null, tint = c.neonCyan, modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(10.dp))
+                Column {
+                    Text(
+                        "Ne pas déranger la nuit",
+                        fontSize   = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        color      = c.textPrimary
+                    )
+                    Text("Silence total programmé", fontSize = 11.sp, color = c.textSecond)
+                }
+            }
+            Switch(
+                checked         = enabled,
+                onCheckedChange = onToggle,
+                colors          = SwitchDefaults.colors(
+                    checkedThumbColor   = c.background,
+                    checkedTrackColor   = c.neonCyan,
+                    uncheckedThumbColor = c.textSecond,
+                    uncheckedTrackColor = c.glassStroke
+                )
+            )
+        }
+
+        AnimatedVisibility(
+            visible = enabled,
+            enter   = expandVertically() + fadeIn(),
+            exit    = shrinkVertically() + fadeOut()
+        ) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 12.dp),
+                shape  = RoundedCornerShape(10.dp),
+                colors = CardDefaults.cardColors(containerColor = c.neonCyan.copy(alpha = 0.05f))
+            ) {
+                Column(
+                    modifier            = Modifier.padding(12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Row(
+                        modifier              = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        verticalAlignment     = Alignment.CenterVertically
+                    ) {
+                        CircularLedClock(
+                            hour    = startHour,
+                            label   = "DÉBUT",
+                            onMinus = { onMinus("start") },
+                            onPlus  = { onPlus("start") }
+                        )
+                        Icon(
+                            Icons.Default.ArrowForward,
+                            null,
+                            tint     = c.neonCyan.copy(alpha = 0.3f),
+                            modifier = Modifier.padding(top = 18.dp)
+                        )
+                        CircularLedClock(
+                            hour    = endHour,
+                            label   = "FIN",
+                            onMinus = { onMinus("end") },
+                            onPlus  = { onPlus("end") }
+                        )
+                    }
+
+                    Spacer(Modifier.height(14.dp))
+
+                    Row(
+                        verticalAlignment     = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Icon(Icons.Default.Warning, null, tint = c.neonOrange, modifier = Modifier.size(14.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            "Blocage strict de ${startHour}h à ${endHour}h",
+                            fontSize   = 11.sp,
+                            color      = c.neonOrange,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
 // ─────────────────────────────────────────────
-// CARD PROFIL
+// HORLOGE CIRCULAIRE AVEC LUNE/SOLEIL
 // ─────────────────────────────────────────────
+@Composable
+private fun CircularLedClock(
+    hour    : Int,
+    label   : String,
+    onMinus : () -> Unit,
+    onPlus  : () -> Unit
+) {
+    val c = LocalColors.current
+    val ledColor = c.neonCyan
+
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(
+            text          = label,
+            fontSize      = 10.sp,
+            fontWeight    = FontWeight.Bold,
+            color         = c.textSecond,
+            letterSpacing = 1.5.sp
+        )
+        Spacer(Modifier.height(6.dp))
+
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(24.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(ledColor.copy(alpha = 0.08f))
+                    .border(0.5.dp, ledColor.copy(alpha = 0.3f), RoundedCornerShape(6.dp))
+                    .clickable { onMinus() },
+                contentAlignment = Alignment.Center
+            ) {
+                Text("−", fontSize = 14.sp, color = ledColor, fontWeight = FontWeight.Bold)
+            }
+
+            // Cadran circulaire
+            Box(
+                modifier = Modifier
+                    .size(55.dp)
+                    .clip(CircleShape)
+                    .background(ledColor.copy(alpha = 0.05f))
+                    .border(1.5.dp, ledColor.copy(alpha = 0.4f), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(
+                        if (hour >= 20 || hour <= 6) Icons.Default.NightlightRound
+                        else Icons.Default.WbSunny,
+                        null,
+                        tint = ledColor,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = "${hour.toString().padStart(2, '0')}",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace,
+                        color = ledColor
+                    )
+                }
+            }
+
+            Box(
+                modifier = Modifier
+                    .size(24.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(ledColor.copy(alpha = 0.08f))
+                    .border(0.5.dp, ledColor.copy(alpha = 0.3f), RoundedCornerShape(6.dp))
+                    .clickable { onPlus() },
+                contentAlignment = Alignment.Center
+            ) {
+                Text("+", fontSize = 14.sp, color = ledColor, fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+}
+
 @Composable
 private fun ProfileCard(
     profile  : BlockingProfile,
@@ -213,11 +429,6 @@ private fun ProfileDetail(label: String, value: String) {
     }
 }
 
-// ─────────────────────────────────────────────
-// CONFIGURATION VACANCES
-// Base : ton code coulissant (pas de chevauchement)
-// Ajout : sélecteur "Profil de retour" sous la date
-// ─────────────────────────────────────────────
 @Composable
 private fun VacationConfigSection(
     config  : VacationConfig,
@@ -241,7 +452,6 @@ private fun VacationConfigSection(
             modifier   = Modifier.padding(bottom = 8.dp)
         )
 
-        // ── 1. DATE DE RETOUR ──────────────────────
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape    = RoundedCornerShape(10.dp),
@@ -284,7 +494,6 @@ private fun VacationConfigSection(
             }
         }
 
-        // ── 2. PROFIL DE RETOUR (coulisse sous la date si une date est définie) ──
         AnimatedVisibility(
             visible = config.hasEndDate,
             enter   = expandVertically() + fadeIn(),
@@ -299,12 +508,7 @@ private fun VacationConfigSection(
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                Icons.Default.SwapHoriz,
-                                null,
-                                tint     = c.neonCyan,
-                                modifier = Modifier.size(18.dp)
-                            )
+                            Icon(Icons.Default.SwapHoriz, null, tint = c.neonCyan, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(10.dp))
                             Column {
                                 Text(
@@ -320,10 +524,7 @@ private fun VacationConfigSection(
                                 )
                             }
                         }
-
                         Spacer(Modifier.height(10.dp))
-
-                        // Sélecteur 2 boutons — Domicile / Travail
                         Row(
                             modifier              = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -358,95 +559,6 @@ private fun VacationConfigSection(
                 }
             }
         }
-
-        Spacer(Modifier.height(16.dp))
-
-        // ── 3. NE PAS DÉRANGER LA NUIT ────────────
-        Row(
-            modifier              = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 4.dp),
-            verticalAlignment     = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                Icon(Icons.Default.NightlightRound, null, tint = c.neonCyan, modifier = Modifier.size(20.dp))
-                Spacer(Modifier.width(10.dp))
-                Column {
-                    Text(
-                        "Ne pas déranger la nuit",
-                        fontSize   = 14.sp,
-                        fontWeight = FontWeight.Medium,
-                        color      = c.textPrimary
-                    )
-                    Text("Silence total programmé", fontSize = 11.sp, color = c.textSecond)
-                }
-            }
-            Switch(
-                checked         = config.autoNightDnd,
-                onCheckedChange = { onSave(config.copy(autoNightDnd = it)) },
-                colors          = SwitchDefaults.colors(
-                    checkedThumbColor   = c.background,
-                    checkedTrackColor   = c.neonCyan,
-                    uncheckedThumbColor = c.textSecond,
-                    uncheckedTrackColor = c.glassStroke
-                )
-            )
-        }
-
-        // ── 4. HORAIRES (coulisse sous le switch si DND activé) ──
-        AnimatedVisibility(
-            visible = config.autoNightDnd,
-            enter   = expandVertically() + fadeIn(),
-            exit    = shrinkVertically() + fadeOut()
-        ) {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 12.dp),
-                shape  = RoundedCornerShape(10.dp),
-                colors = CardDefaults.cardColors(containerColor = c.neonCyan.copy(alpha = 0.05f))
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        modifier              = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
-                        verticalAlignment     = Alignment.CenterVertically
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("DÉBUT", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = c.textSecond)
-                            Text(
-                                "${config.nightStart.toString().padStart(2, '0')}h",
-                                fontSize   = 24.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                color      = c.neonCyan
-                            )
-                        }
-                        Icon(Icons.Default.ArrowForward, null, tint = c.neonCyan.copy(0.3f))
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("FIN", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = c.textSecond)
-                            Text(
-                                "${config.nightEnd.toString().padStart(2, '0')}h",
-                                fontSize   = 24.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                color      = c.neonCyan
-                            )
-                        }
-                    }
-                    Spacer(Modifier.height(12.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Warning, null, tint = c.neonOrange, modifier = Modifier.size(14.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            "Blocage strict de ${config.nightStart}h à ${config.nightEnd}h",
-                            fontSize   = 11.sp,
-                            color      = c.neonOrange,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-                }
-            }
-        }
     }
 
     if (showDatePicker) {
@@ -461,9 +573,6 @@ private fun VacationConfigSection(
     }
 }
 
-// ─────────────────────────────────────────────
-// DATE PICKER
-// ─────────────────────────────────────────────
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun VacationDatePickerDialog(
@@ -480,13 +589,12 @@ private fun VacationDatePickerDialog(
                 utcTimeMillis > System.currentTimeMillis()
         }
     )
-
     DatePickerDialog(
         onDismissRequest = onDismiss,
         confirmButton    = {
-            TextButton(onClick = {
-                state.selectedDateMillis?.let { onConfirm(it) }
-            }) { Text("OK", color = c.neonCyan) }
+            TextButton(onClick = { state.selectedDateMillis?.let { onConfirm(it) } }) {
+                Text("OK", color = c.neonCyan)
+            }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("Annuler", color = c.textSecond) }
@@ -516,13 +624,9 @@ private fun VacationDatePickerDialog(
     }
 }
 
-// ─────────────────────────────────────────────
-// RÉSUMÉ DU PROFIL ACTIF
-// ─────────────────────────────────────────────
 @Composable
 private fun ActiveProfileSummary(profile: BlockingProfile, vacationConfig: VacationConfig) {
     val c = LocalColors.current
-
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -562,19 +666,6 @@ private fun ActiveProfileSummary(profile: BlockingProfile, vacationConfig: Vacat
                         }
                     }
                     Text(msg, fontSize = 12.sp, color = c.textSecond)
-                }
-            }
-
-            if (profile == BlockingProfile.VACATION && vacationConfig.autoNightDnd) {
-                Spacer(Modifier.height(8.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.NightlightRound, null, tint = c.neonOrange, modifier = Modifier.size(14.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text(
-                        "DND nocturne actif : ${vacationConfig.nightStart}h–${vacationConfig.nightEnd}h",
-                        fontSize = 11.sp,
-                        color    = c.neonOrange
-                    )
                 }
             }
         }

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2025-2026 Franck R-F (souffly007)
 package fr.bonobo.phonezen.service
 
 import android.content.BroadcastReceiver
@@ -9,37 +11,36 @@ import fr.bonobo.phonezen.utils.VoicemailNotificationHelper
 
 class VoicemailSmsReceiver : BroadcastReceiver() {
 
-    private val TAG = "VoicemailSmsReceiver"
-
-    // Action personnalisée pour communiquer avec le ViewModel
     companion object {
+        private const val TAG = "VoicemailSmsReceiver"
         const val ACTION_VOICEMAIL_RECEIVED = "fr.bonobo.phonezen.ACTION_VOICEMAIL_RECEIVED"
     }
 
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action == Telephony.Sms.Intents.SMS_RECEIVED_ACTION) {
-            val messages = Telephony.Sms.Intents.getMessagesFromIntent(intent)
-            messages?.forEach { message ->
-                val body = message.displayMessageBody ?: return@forEach
-                Log.d(TAG, "📱 SMS reçu: $body")
+        if (intent.action != Telephony.Sms.Intents.SMS_RECEIVED_ACTION) return
 
-                val keywords = listOf(
-                    "répondeur", "message vocal", "vocale", "messagerie",
-                    "voicemail", "laissé un message", "appel manqué", "888"
-                )
+        val messages = Telephony.Sms.Intents.getMessagesFromIntent(intent) ?: return
 
-                if (keywords.any { body.contains(it, ignoreCase = true) }) {
-                    Log.d(TAG, "✅ Détection répondeur ! Envoi du signal au ViewModel")
+        messages.forEach { message ->
+            val body = message.displayMessageBody ?: return@forEach
+            Log.d(TAG, "SMS reçu: $body")
 
-                    // 1. Afficher la notification système
-                    VoicemailNotificationHelper.showVoicemailNotification(context)
+            val keywords = listOf(
+                "répondeur", "message vocal", "vocale", "messagerie",
+                "voicemail", "laissé un message", "appel manqué", "888"
+            )
 
-                    // 2. Envoyer le signal interne à l'application
-                    val updateIntent = Intent(ACTION_VOICEMAIL_RECEIVED).apply {
-                        setPackage(context.packageName)
-                    }
-                    context.sendBroadcast(updateIntent)
+            if (keywords.any { body.contains(it, ignoreCase = true) }) {
+                Log.d(TAG, "Détection répondeur — envoi du signal au ViewModel")
+
+                // 1. Notification système
+                VoicemailNotificationHelper.showVoicemailNotification(context)
+
+                // 2. Signal interne à l'app
+                val updateIntent = Intent(ACTION_VOICEMAIL_RECEIVED).apply {
+                    setPackage(context.packageName)
                 }
+                context.sendBroadcast(updateIntent)
             }
         }
     }

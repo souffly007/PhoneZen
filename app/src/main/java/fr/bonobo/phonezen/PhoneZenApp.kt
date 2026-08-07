@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2025-2026 Franck R-F (souffly007)
+// This file is part of PhoneZen.
 package fr.bonobo.phonezen
 
 import android.app.Application
@@ -5,31 +8,51 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
 import android.os.Build
+import fr.bonobo.phonezen.blocking.HospitalWhitelistManager
+import fr.bonobo.phonezen.data.local.AppDatabase
+import fr.bonobo.phonezen.data.repository.HealthcareRepository
+import fr.bonobo.phonezen.service.HealthcareWhitelistSyncWorker
+import fr.bonobo.phonezen.utils.CrashHandler
 
 class PhoneZenApp : Application() {
 
+    // ── Singletons accessibles depuis toute l'app ─────────────────────────
+    val db by lazy { AppDatabase.getDatabase(this) }
+
+    val healthcareRepository by lazy {
+        HealthcareRepository(this, db.healthcareWhitelistDao())
+    }
+
+    val hospitalWhitelistManager by lazy {
+        HospitalWhitelistManager(healthcareRepository)
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+
     override fun onCreate() {
         super.onCreate()
-        // On prépare le terrain pour Android 8+ dès le lancement
+
+        // ── Crash reporter — doit être installé en premier ────────────────
+        CrashHandler.install(this)
+
         createNotificationChannels()
+
+        // Planifie la sync Supabase toutes les 24h (idempotent, safe à appeler à chaque démarrage)
+        HealthcareWhitelistSyncWorker.schedule(this)
     }
 
     private fun createNotificationChannels() {
-        // Les "Channels" sont obligatoires à partir d'Android 8 (Oreo - API 26)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
 
-            // 1. Canal pour les appels actifs (Priorité haute pour l'InCallService)
             val callChannel = NotificationChannel(
                 "phone_zen_calls",
                 "Appels actifs",
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
                 description = "Affiché pendant que vous êtes au téléphone avec PhoneZen"
-                // On évite de faire vibrer le téléphone pour la notification de service
                 enableVibration(false)
             }
 
-            // 2. Canal pour les blocages/protections (Optionnel, si tu veux notifier un blocage)
             val protectionChannel = NotificationChannel(
                 "phone_zen_protection",
                 "Protection Anti-Spam",
@@ -38,7 +61,6 @@ class PhoneZenApp : Application() {
                 description = "Notifications de filtrage et de blocage"
             }
 
-            // On enregistre les canaux auprès du système
             val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             manager.createNotificationChannel(callChannel)
             manager.createNotificationChannel(protectionChannel)

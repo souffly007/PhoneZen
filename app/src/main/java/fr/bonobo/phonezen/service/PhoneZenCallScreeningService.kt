@@ -1,23 +1,24 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2025-2026 Franck R-F (souffly007)
+// This file is part of PhoneZen.
 package fr.bonobo.phonezen.service
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
-import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
-import android.os.Handler
-import android.os.Looper
 import android.telecom.Call
 import android.telecom.CallScreeningService
 import android.util.Log
-import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import fr.bonobo.phonezen.MainActivity
+import fr.bonobo.phonezen.blocking.HospitalWhitelistManager
 import fr.bonobo.phonezen.data.local.AppDatabase
 import fr.bonobo.phonezen.data.local.BlockedCall
+import fr.bonobo.phonezen.data.repository.HealthcareRepository
 import fr.bonobo.phonezen.utils.PhoneUtils
 import fr.bonobo.phonezen.utils.SpamDetector
 import kotlinx.coroutines.CoroutineScope
@@ -31,6 +32,7 @@ class PhoneZenCallScreeningService : CallScreeningService() {
     private val TAG          = "PhoneZenService"
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private lateinit var detector: SpamDetector
+    private lateinit var hospitalWhitelistManager: HospitalWhitelistManager
 
     companion object {
         const val CHANNEL_ID      = "phonezen_blocked"
@@ -38,36 +40,64 @@ class PhoneZenCallScreeningService : CallScreeningService() {
         const val NOTIF_ID_BASE   = 1000
         const val ACTION_CALLBACK = "fr.bonobo.phonezen.ACTION_CALLBACK"
         const val EXTRA_NUMBER    = "extra_number"
+        private const val PREF_FILE               = "phonezen_prefs"
+        private const val PREF_HOSPITAL_WHITELIST = "hospital_whitelist_enabled"
     }
 
     override fun onCreate() {
         super.onCreate()
         detector = SpamDetector(applicationContext)
+        val db   = AppDatabase.getDatabase(applicationContext)
+        hospitalWhitelistManager = HospitalWhitelistManager(
+            HealthcareRepository(applicationContext, db.healthcareWhitelistDao())
+        )
         createNotificationChannel()
     }
 
-    // ─────────────────────────────────────────────
-    // POINT D'ENTRÉE PRINCIPAL
-    // Ordre de priorité :
-    //   1. Appel sortant        → autoriser immédiatement
-    //   2. Contact connu        → autoriser
-    //   3. Liste noire manuelle → bloquer (Room blocked_numbers)
-    //   4. Communautaire        → bloquer (SharedPrefs)
-    //   5. ARCEP / SpamDetector → bloquer ou autoriser
-    // ─────────────────────────────────────────────
+    private fun isHospitalWhitelistEnabled(): Boolean =
+        applicationContext
+            .getSharedPreferences(PREF_FILE, Context.MODE_PRIVATE)
+            .getBoolean(PREF_HOSPITAL_WHITELIST, true)
+
+    private fun handleDrivingModeReply(number: String) {
+        val manager = DrivingModeManager(applicationContext)
+        if (!manager.isDriving.value) return
+        try {
+            val smsManager = android.telephony.SmsManager.getDefault()
+            smsManager.sendTextMessage(
+                number, null,
+                DrivingModeManager.SMS_AUTO_REPLY,
+                null, null
+            )
+            Log.i("DrivingMode", "SMS auto envoyé à $number")
+        } catch (e: Exception) {
+            Log.e("DrivingMode", "Erreur envoi SMS auto", e)
+        }
+    }
+
     override fun onScreenCall(callDetails: Call.Details) {
 
-        // 1. Appel sortant → toujours autoriser
+        val earlyNumber = callDetails.handle?.schemeSpecificPart ?: ""
+        if (earlyNumber.isNotBlank()
+            && isHospitalWhitelistEnabled()
+            && hospitalWhitelistManager.isHospitalNumber(earlyNumber)
+        ) {
+            val name = hospitalWhitelistManager.getHospitalName(earlyNumber)
+                ?: "Établissement de santé"
+            Log.i(TAG, "🏥 Appel hôpital autorisé : $earlyNumber → $name")
+            respondToCall(callDetails, CallResponse.Builder().build())
+            return
+        }
+
         if (callDetails.callDirection == Call.Details.DIRECTION_OUTGOING) {
             respondToCall(callDetails, CallResponse.Builder().build())
             return
         }
 
-        val rawNumber = callDetails.handle?.schemeSpecificPart ?: ""
+        val rawNumber = earlyNumber
 
         serviceScope.launch {
 
-            // 2. Contact connu → autoriser (lookup avec timeout)
             val contactName = withTimeoutOrNull(1500L) {
                 PhoneUtils.lookupContactName(applicationContext, rawNumber)
             }
@@ -77,8 +107,6 @@ class PhoneZenCallScreeningService : CallScreeningService() {
                 return@launch
             }
 
-            // 3. ✅ Liste noire manuelle (Room blocked_numbers)
-            //    On teste les deux formats pour éviter les faux négatifs +33 / 0X
             val normalized = PhoneUtils.normalizeNumber(rawNumber)
             val alt = when {
                 normalized.startsWith("+33") -> "0" + normalized.substring(3)
@@ -92,30 +120,20 @@ class PhoneZenCallScreeningService : CallScreeningService() {
 
             if (isManuallyBlocked) {
                 Log.w(TAG, "BLOCAGE LISTE NOIRE MANUELLE : $rawNumber")
-                blockCall(
-                    callDetails = callDetails,
-                    number      = rawNumber,
-                    reason      = "Bloqué manuellement",
-                    riskLevel   = "MANUAL",
-                    notify      = true
-                )
+                blockCall(callDetails, rawNumber, "Bloqué manuellement", "MANUAL", true)
                 return@launch
             }
 
-            // 4. Liste communautaire (cache SharedPrefs)
             if (detector.isCommunityBlocked(rawNumber)) {
                 Log.w(TAG, "BLOCAGE COMMUNAUTAIRE : $rawNumber")
                 blockCall(
-                    callDetails = callDetails,
-                    number      = rawNumber,
-                    reason      = "Signalé par la communauté (≥ ${SpamDetector.COMMUNITY_BLOCK_THRESHOLD} signalements)",
-                    riskLevel   = "COMMUNITY",
-                    notify      = true
+                    callDetails, rawNumber,
+                    "Signalé par la communauté (≥ ${SpamDetector.COMMUNITY_BLOCK_THRESHOLD} signalements)",
+                    "COMMUNITY", true
                 )
                 return@launch
             }
 
-            // 5. Analyse ARCEP + profils + DND + horaires
             val result = detector.analyze(
                 rawNumber  = rawNumber,
                 isContact  = false,
@@ -125,11 +143,9 @@ class PhoneZenCallScreeningService : CallScreeningService() {
             if (result.isSpam) {
                 Log.w(TAG, "BLOCAGE ARCEP : $rawNumber (${result.reason})")
                 blockCall(
-                    callDetails = callDetails,
-                    number      = rawNumber,
-                    reason      = result.reason.ifBlank { "Démarchage détecté" },
-                    riskLevel   = result.riskLevel.name,
-                    notify      = true
+                    callDetails, rawNumber,
+                    result.reason.ifBlank { "Démarchage détecté" },
+                    result.riskLevel.name, true
                 )
             } else {
                 Log.d(TAG, "Autorisé : $rawNumber")
@@ -138,9 +154,6 @@ class PhoneZenCallScreeningService : CallScreeningService() {
         }
     }
 
-    // ─────────────────────────────────────────────
-    // BLOCAGE + ENREGISTREMENT HISTORIQUE + NOTIFICATION
-    // ─────────────────────────────────────────────
     private fun blockCall(
         callDetails: Call.Details,
         number     : String,
@@ -159,16 +172,11 @@ class PhoneZenCallScreeningService : CallScreeningService() {
                 .build()
         )
 
-        // Enregistrement dans l'historique (blocked_calls)
         serviceScope.launch {
             try {
                 val db = AppDatabase.getDatabase(applicationContext)
                 db.blockedCallDao().insert(
-                    BlockedCall(
-                        number    = number,
-                        reason    = reason,
-                        riskLevel = riskLevel
-                    )
+                    BlockedCall(number = number, reason = reason, riskLevel = riskLevel)
                 )
             } catch (e: Exception) {
                 Log.e(TAG, "Erreur enregistrement historique : ${e.message}")
@@ -178,11 +186,7 @@ class PhoneZenCallScreeningService : CallScreeningService() {
         if (notify) sendBlockNotification(number, reason)
     }
 
-    // ─────────────────────────────────────────────
-    // NOTIFICATION avec actions "Rappeler" et "Ne plus bloquer"
-    // ─────────────────────────────────────────────
     private fun sendBlockNotification(number: String, reason: String) {
-        // Intent principal → ouvre MainActivity
         val openIntent = Intent(applicationContext, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
         }
@@ -191,7 +195,6 @@ class PhoneZenCallScreeningService : CallScreeningService() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        // Action "Rappeler"
         val callIntent = Intent(Intent.ACTION_CALL, Uri.parse("tel:$number")).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK
         }
@@ -202,7 +205,6 @@ class PhoneZenCallScreeningService : CallScreeningService() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        // Action "Ne plus bloquer" → BroadcastReceiver
         val whitelistIntent = Intent(ACTION_CALLBACK).apply {
             setPackage(applicationContext.packageName)
             putExtra(EXTRA_NUMBER, number)
@@ -237,85 +239,13 @@ class PhoneZenCallScreeningService : CallScreeningService() {
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
-                CHANNEL_ID,
-                CHANNEL_NAME,
+                CHANNEL_ID, CHANNEL_NAME,
                 NotificationManager.IMPORTANCE_DEFAULT
             ).apply {
                 description = "Notifications pour les appels bloqués par PhoneZen"
             }
             val nm = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             nm.createNotificationChannel(channel)
-        }
-    }
-}
-
-// ─────────────────────────────────────────────
-// BroadcastReceiver — action "Ne plus bloquer" depuis la notification
-//
-// À DÉCLARER dans AndroidManifest.xml :
-//
-// <receiver
-//     android:name=".service.BlockedCallActionReceiver"
-//     android:exported="false">
-//     <intent-filter>
-//         <action android:name="fr.bonobo.phonezen.ACTION_CALLBACK"/>
-//     </intent-filter>
-// </receiver>
-// ─────────────────────────────────────────────
-class BlockedCallActionReceiver : BroadcastReceiver() {
-
-    companion object {
-        const val ACTION_WHITELIST_UPDATED = "fr.bonobo.phonezen.WHITELIST_UPDATED"
-    }
-
-    override fun onReceive(context: Context, intent: Intent) {
-        val number = intent.getStringExtra(PhoneZenCallScreeningService.EXTRA_NUMBER) ?: return
-        val action = intent.getStringExtra("action") ?: return
-
-        if (action == "whitelist") {
-            val normalized = PhoneUtils.normalizeNumber(number)
-            val detector   = SpamDetector(context)
-
-            // Ajouter à la whitelist
-            detector.addToWhitelist(normalized)
-
-            // Retirer du cache communautaire pour éviter un re-blocage
-            detector.removeCommunityBlocked(normalized)
-
-            // ✅ Retirer aussi de la liste noire Room (les deux formats)
-            val alt = when {
-                normalized.startsWith("+33") -> "0" + normalized.substring(3)
-                normalized.startsWith("0")   -> "+33" + normalized.substring(1)
-                else                         -> null
-            }
-            CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
-                try {
-                    val db = AppDatabase.getDatabase(context)
-                    db.blockedNumberDao().deleteByNumber(normalized)
-                    alt?.let { db.blockedNumberDao().deleteByNumber(it) }
-                } catch (e: Exception) {
-                    Log.e("BlockedCallActionReceiver", "Erreur suppression liste noire : ${e.message}")
-                }
-            }
-
-            // Annuler la notification correspondante
-            val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            nm.cancel(PhoneZenCallScreeningService.NOTIF_ID_BASE + number.hashCode())
-
-            // Notifier le ViewModel pour recharger la whitelist
-            val updateIntent = Intent(ACTION_WHITELIST_UPDATED).apply {
-                setPackage(context.packageName)
-            }
-            context.sendBroadcast(updateIntent)
-
-            // Toast de confirmation
-            Handler(Looper.getMainLooper()).post {
-                Toast.makeText(
-                    context,
-                    "✅ $normalized ajouté à la liste blanche",
-                    Toast.LENGTH_SHORT
-                ).show()
-            }
         }
     }
 }

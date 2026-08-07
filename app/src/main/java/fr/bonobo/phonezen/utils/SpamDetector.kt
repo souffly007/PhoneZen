@@ -1,6 +1,11 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2025-2026 Franck R-F (souffly007)
+// This file is part of PhoneZen.
 package fr.bonobo.phonezen.utils
 
 import android.content.Context
+import fr.bonobo.phonezen.PhoneZenApp
+import fr.bonobo.phonezen.blocking.HospitalWhitelistManager
 import fr.bonobo.phonezen.data.model.RiskLevel
 import fr.bonobo.phonezen.data.model.SpamResult
 import org.json.JSONObject
@@ -9,8 +14,10 @@ import java.util.Calendar
 
 class SpamDetector(context: Context) {
 
-    private val prefs          = context.getSharedPreferences("phonezen_prefs", Context.MODE_PRIVATE)
-    private val profileManager = ProfileManager(context)
+    private val prefs                    = context.getSharedPreferences("phonezen_prefs", Context.MODE_PRIVATE)
+    private val profileManager           = ProfileManager(context)
+    private val hospitalWhitelistManager : HospitalWhitelistManager =
+        (context.applicationContext as PhoneZenApp).hospitalWhitelistManager
 
     companion object {
         private val alwaysBlockPrefixes   = mutableListOf<String>()
@@ -32,7 +39,6 @@ class SpamDetector(context: Context) {
                 alwaysBlockPatterns.clear()
                 neverBlock.clear()
 
-                // ── PRIORITY_1 : Urgences & numéros protégés → never_block ──
                 root.optJSONObject("PRIORITY_1_SAFE_LIST")?.let { p1 ->
                     p1.optJSONArray("numbers")?.let { arr ->
                         for (i in 0 until arr.length()) neverBlock.add(arr.getString(i))
@@ -41,22 +47,16 @@ class SpamDetector(context: Context) {
                         for (i in 0 until arr.length()) neverBlock.add(arr.getString(i))
                     }
                 }
-
-                // ── PRIORITY_2 : NPV ARCEP stricts → always_block ──
                 root.optJSONObject("PRIORITY_2_NPV_ARCEP")?.let { p2 ->
                     p2.optJSONArray("prefixes")?.let { arr ->
                         for (i in 0 until arr.length()) alwaysBlockPrefixes.add(arr.getString(i))
                     }
                 }
-
-                // ── PRIORITY_3 : VoIP télémarketing → telemarketing ──
                 root.optJSONObject("PRIORITY_3_COMMERCIAL_FLOTTE")?.let { p3 ->
                     p3.optJSONArray("prefixes")?.let { arr ->
                         for (i in 0 until arr.length()) telemarketingPrefixes.add(arr.getString(i))
                     }
                 }
-
-                // ── Ancienne structure conservée pour rétrocompatibilité ──
                 root.optJSONArray("always_block_prefixes")?.let { arr ->
                     for (i in 0 until arr.length()) alwaysBlockPrefixes.add(arr.getString(i))
                 }
@@ -84,27 +84,8 @@ class SpamDetector(context: Context) {
 
     init { loadJson(context) }
 
-    // ─────────────────────────────────────────────
-    // NORMALISATION UNIFIÉE
-    // ─────────────────────────────────────────────
-    private fun norm(number: String?): String =
-        PhoneUtils.normalizeNumber(number)
+    private fun norm(number: String?): String = PhoneUtils.normalizeNumber(number)
 
-    // ─────────────────────────────────────────────
-    // ANALYSE PRINCIPALE
-    // Ordre de priorité :
-    //   1. Numéro masqué
-    //   2. Normalisation
-    //   3. Liste blanche (priorité absolue)
-    //   4. Services d'urgence
-    //   5. Blocage communautaire (signalé ≥ 10×)   ← AJOUTÉ
-    //   6. DND nocturne automatique (profil Vacances)
-    //   7. Profil de blocage (contact ? favori ? pro ?)
-    //   8. Mode Ne pas déranger
-    //   9. Spoofing / patterns
-    //  10. Préfixes ARCEP
-    //  11. Horaires de blocage
-    // ─────────────────────────────────────────────
     fun analyze(rawNumber: String?, isContact: Boolean = false, isFavorite: Boolean = false): SpamResult {
 
         // 1. Numéro masqué
@@ -122,19 +103,37 @@ class SpamDetector(context: Context) {
         val local      = normalized
         val intl       = toInternationalFormat(normalized)
 
-        // 2. Liste blanche → jamais bloquer (priorité absolue)
+        CrashHandler.lastAnalyzedNumber = local
+        CrashHandler.lastAction         = "SpamDetector.analyze: $local"
+
+        // 2. Whitelist santé — PRIORITÉ ABSOLUE
+        CrashHandler.lastAction = "SpamDetector: whitelist santé FINESS"
+        if (hospitalWhitelistManager.isHospitalNumber(local) ||
+            hospitalWhitelistManager.isHospitalNumber(intl)) {
+            val name = hospitalWhitelistManager.getHospitalName(local)
+                ?: hospitalWhitelistManager.getHospitalName(intl)
+                ?: "Établissement de santé"
+            return SpamResult(
+                isSpam    = false,
+                reason    = "Établissement de santé : $name",
+                riskLevel = RiskLevel.NONE
+            )
+        }
+
+        // 3. Liste blanche utilisateur
+        CrashHandler.lastAction = "SpamDetector: liste blanche utilisateur"
         if (getWhitelist().any { norm(it) == local || norm(it) == intl }) {
             return SpamResult(isSpam = false, reason = "Liste blanche", riskLevel = RiskLevel.NONE)
         }
 
-        // 3. Services d'urgence → jamais bloquer
+        // 4. Services d'urgence JSON
+        CrashHandler.lastAction = "SpamDetector: services urgence"
         if (neverBlock.any { local == it || local == "0$it" || local.startsWith(it) }) {
             return SpamResult(isSpam = false, reason = "Numéro protégé", riskLevel = RiskLevel.NONE)
         }
 
-        // 4. Blocage communautaire (signalé ≥ COMMUNITY_BLOCK_THRESHOLD fois)
-        //    Placé après la safe list pour ne jamais bloquer un numéro d'urgence,
-        //    mais avant le profil pour bloquer même si le profil serait permissif.
+        // 5. Blocage communautaire
+        CrashHandler.lastAction = "SpamDetector: blocage communautaire"
         if (isCommunityBlocked(normalized)) {
             return SpamResult(
                 isSpam    = true,
@@ -143,12 +142,14 @@ class SpamDetector(context: Context) {
             )
         }
 
-        // 5. DND nocturne automatique (profil Vacances uniquement)
+        // 6. DND nocturne automatique (profil Vacances)
+        CrashHandler.lastAction = "SpamDetector: DND nocturne vacances"
         if (profileManager.isAutoNightDndActive()) {
             return SpamResult(isSpam = true, reason = "Mode nuit vacances actif", riskLevel = RiskLevel.HIGH)
         }
 
-        // 6. Logique profil de blocage
+        // 7. Profil de blocage
+        CrashHandler.lastAction = "SpamDetector: profil de blocage"
         val isProNumber     = profileManager.isProNumber(local)
         val profileDecision = profileManager.isAllowedByProfile(
             isContact   = isContact,
@@ -158,28 +159,38 @@ class SpamDetector(context: Context) {
         when (profileDecision) {
             true  -> return SpamResult(isSpam = false, reason = "Autorisé par profil ${profileManager.getActiveProfile().label}", riskLevel = RiskLevel.NONE)
             false -> return SpamResult(isSpam = true,  reason = "Bloqué par profil ${profileManager.getActiveProfile().label}",  riskLevel = RiskLevel.MEDIUM)
-            null  -> { /* continuer l'analyse normale */ }
+            null  -> { /* continuer */ }
         }
 
-        // 7. Mode Ne pas déranger global
+        // 8. Mode Ne pas déranger
+        CrashHandler.lastAction = "SpamDetector: mode Ne pas déranger"
         if (isDoNotDisturbEnabled()) {
-            return SpamResult(isSpam = true, reason = "Mode Ne pas déranger actif", riskLevel = RiskLevel.HIGH)
+            if (isDndScheduleEnabled()) {
+                if (isInDndSchedule()) {
+                    return SpamResult(isSpam = true, reason = "Ne pas déranger (horaires)", riskLevel = RiskLevel.HIGH)
+                }
+            } else {
+                return SpamResult(isSpam = true, reason = "Mode Ne pas déranger actif", riskLevel = RiskLevel.HIGH)
+            }
         }
 
-        // 8. Spoofing — numéro anormalement long
+        // 9. Spoofing
+        CrashHandler.lastAction = "SpamDetector: détection spoofing"
         val digits = normalized.filter { it.isDigit() }
         if (digits.length > 15) {
             return SpamResult(isSpam = true, reason = "Numéro invalide (Spoofing)", riskLevel = RiskLevel.CRITICAL)
         }
 
-        // 9. Patterns regex
+        // 10. Patterns regex
+        CrashHandler.lastAction = "SpamDetector: patterns regex"
         for (pattern in alwaysBlockPatterns) {
             if (pattern.containsMatchIn(normalized)) {
                 return SpamResult(isSpam = true, reason = "Pattern suspect", riskLevel = RiskLevel.CRITICAL)
             }
         }
 
-        // 10. Préfixes ARCEP — on teste les deux formats (local 0X et international +33X)
+        // 11. Préfixes ARCEP
+        CrashHandler.lastAction = "SpamDetector: préfixes ARCEP"
         for (target in listOf(local, intl)) {
             if (alwaysBlockPrefixes.any { target.startsWith(it) })
                 return SpamResult(isSpam = true, reason = "Numéro frauduleux connu (ARCEP)", riskLevel = RiskLevel.HIGH)
@@ -187,11 +198,13 @@ class SpamDetector(context: Context) {
                 return SpamResult(isSpam = true, reason = "Démarchage commercial", riskLevel = RiskLevel.MEDIUM)
         }
 
-        // 11. Horaires de blocage
+        // 12. Horaires de blocage
+        CrashHandler.lastAction = "SpamDetector: horaires de blocage"
         if (isInBlockingSchedule()) {
             return SpamResult(isSpam = true, reason = "Hors horaires autorisés", riskLevel = RiskLevel.MEDIUM)
         }
 
+        CrashHandler.lastAction = "SpamDetector: terminé → pas de spam"
         return SpamResult(isSpam = false, riskLevel = RiskLevel.NONE)
     }
 
@@ -277,6 +290,23 @@ class SpamDetector(context: Context) {
     // ─────────────────────────────────────────────
     fun setDoNotDisturb(enabled: Boolean) = prefs.edit().putBoolean("do_not_disturb", enabled).apply()
     fun isDoNotDisturbEnabled(): Boolean  = prefs.getBoolean("do_not_disturb", false)
+
+    fun setDndScheduleEnabled(enabled: Boolean) = prefs.edit().putBoolean("dnd_schedule_enabled", enabled).apply()
+    fun isDndScheduleEnabled(): Boolean          = prefs.getBoolean("dnd_schedule_enabled", false)
+
+    fun setDndStartHour(h: Int) = prefs.edit().putInt("dnd_start_hour", h).apply()
+    fun getDndStartHour(): Int  = prefs.getInt("dnd_start_hour", 22)
+    fun setDndEndHour(h: Int)   = prefs.edit().putInt("dnd_end_hour", h).apply()
+    fun getDndEndHour(): Int    = prefs.getInt("dnd_end_hour", 8)
+
+    fun isInDndSchedule(): Boolean {
+        val now    = Calendar.getInstance()
+        val nowH   = now.get(Calendar.HOUR_OF_DAY)
+        val startH = getDndStartHour()
+        val endH   = getDndEndHour()
+        return if (startH > endH) nowH >= startH || nowH < endH
+        else nowH in startH until endH
+    }
 
     // ─────────────────────────────────────────────
     // NUMÉROS PRIVÉS

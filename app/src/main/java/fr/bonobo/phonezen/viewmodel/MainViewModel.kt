@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2025-2026 Franck R-F (souffly007)
+// This file is part of PhoneZen.
 package fr.bonobo.phonezen.viewmodel
 
 import android.app.Application
@@ -10,8 +13,10 @@ import android.util.Log
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import fr.bonobo.phonezen.blocking.HospitalWhitelistManager
 import fr.bonobo.phonezen.data.local.*
 import fr.bonobo.phonezen.data.model.*
+import fr.bonobo.phonezen.data.repository.HealthcareRepository
 import fr.bonobo.phonezen.data.repository.ReportRepository
 import fr.bonobo.phonezen.service.BlockedCallActionReceiver
 import fr.bonobo.phonezen.service.VoicemailSmsReceiver
@@ -25,15 +30,23 @@ import kotlinx.coroutines.withContext
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
 
-    private val prefs         = app.getSharedPreferences("phonezen_prefs", Context.MODE_PRIVATE)
-    private val db            = AppDatabase.getDatabase(app)
-    val spamDetector          = SpamDetector(app)
-    val profileManager        = ProfileManager(app)
-    private val reportRepo    = ReportRepository()
+    companion object {
+        var instance: MainViewModel? = null
+            private set
+        private const val PREF_HOSPITAL_WHITELIST = "hospital_whitelist_enabled"
+        private const val PREF_POPUP_MODE         = "call_popup_mode"
+    }
 
-    // ─────────────────────────────────────────────
-    // STATE
-    // ─────────────────────────────────────────────
+    private val prefs        = app.getSharedPreferences("phonezen_prefs", Context.MODE_PRIVATE)
+    private val db           = AppDatabase.getDatabase(app)
+    val spamDetector         = SpamDetector(app)
+    val profileManager       = ProfileManager(app)
+    private val reportRepo   = ReportRepository()
+
+    private val healthcareRepo   = HealthcareRepository(app, db.healthcareWhitelistDao())
+    val hospitalWhitelistManager = HospitalWhitelistManager(healthcareRepo)
+
+    // ─── STATE ────────────────────────────────────────────────────────
     private val _callGroups = MutableStateFlow<List<CallGroup>>(emptyList())
     val callGroups: StateFlow<List<CallGroup>> = _callGroups
 
@@ -43,11 +56,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _favorites = MutableStateFlow<List<Contact>>(emptyList())
     val favorites: StateFlow<List<Contact>> = _favorites
 
-    // Historique des appels bloqués (table blocked_calls)
     private val _blockedCalls = MutableStateFlow<List<BlockedCall>>(emptyList())
     val blockedCalls: StateFlow<List<BlockedCall>> = _blockedCalls
 
-    // ✅ Liste noire active (table blocked_numbers) — manquait dans l'original
     private val _blockedNumbers = MutableStateFlow<List<BlockedNumber>>(emptyList())
     val blockedNumbers: StateFlow<List<BlockedNumber>> = _blockedNumbers
 
@@ -69,26 +80,21 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _hasNewVoicemail = MutableStateFlow(prefs.getBoolean("has_voicemail", false))
     val hasNewVoicemail: StateFlow<Boolean> = _hasNewVoicemail
 
-    // ─────────────────────────────────────────────
-    // GESTION CONTACT À MULTIPLES NUMÉROS
-    // ─────────────────────────────────────────────
     private val _pendingCallContact = MutableStateFlow<Contact?>(null)
     val pendingCallContact: StateFlow<Contact?> = _pendingCallContact
 
-    // ─────────────────────────────────────────────
-    // PARAMÈTRES
-    // ─────────────────────────────────────────────
+    // ─── PARAMÈTRES ───────────────────────────────────────────────────
     private val _blockPrivate = MutableStateFlow(spamDetector.isBlockPrivateEnabled())
     val blockPrivate: StateFlow<Boolean> = _blockPrivate
 
     private val _hideBlocked = MutableStateFlow(prefs.getBoolean("hide_blocked", true))
     val hideBlocked: StateFlow<Boolean> = _hideBlocked
 
+    private val _doNotDisturb = MutableStateFlow(prefs.getBoolean("do_not_disturb", false))
+    val doNotDisturb: StateFlow<Boolean> = _doNotDisturb
+
     private val _whitelist = MutableStateFlow(spamDetector.getWhitelist())
     val whitelist: StateFlow<Set<String>> = _whitelist
-
-    private val _doNotDisturb = MutableStateFlow(spamDetector.isDoNotDisturbEnabled())
-    val doNotDisturb: StateFlow<Boolean> = _doNotDisturb
 
     private val _scheduleEnabled = MutableStateFlow(spamDetector.isScheduleEnabled())
     val scheduleEnabled: StateFlow<Boolean> = _scheduleEnabled
@@ -105,23 +111,60 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _scheduleEndMinute = MutableStateFlow(spamDetector.getScheduleEndMinute())
     val scheduleEndMinute: StateFlow<Int> = _scheduleEndMinute
 
-    // ─────────────────────────────────────────────
-    // PROFILS
-    // ─────────────────────────────────────────────
+    private val _communityBlockEnabled = MutableStateFlow(spamDetector.isCommunityBlockEnabled())
+    val communityBlockEnabled: StateFlow<Boolean> = _communityBlockEnabled
+
+    // ─── WHITELIST HÔPITAUX ───────────────────────────────────────────
+    private val _hospitalWhitelistEnabled = MutableStateFlow(
+        prefs.getBoolean(PREF_HOSPITAL_WHITELIST, true)
+    )
+    val hospitalWhitelistEnabled: StateFlow<Boolean> = _hospitalWhitelistEnabled.asStateFlow()
+
+    private val _hospitalEntriesCount = MutableStateFlow(
+        hospitalWhitelistManager.getEntriesCount()
+    )
+    val hospitalEntriesCount: StateFlow<Int> = _hospitalEntriesCount.asStateFlow()
+
+    // ─── MODE POPUP APPEL ─────────────────────────────────────────────
+    private val _callPopupMode = MutableStateFlow(
+        CallPopupMode.valueOf(
+            prefs.getString(PREF_POPUP_MODE, CallPopupMode.FULLSCREEN.name)
+                ?: CallPopupMode.FULLSCREEN.name
+        )
+    )
+    val callPopupMode: StateFlow<CallPopupMode> = _callPopupMode.asStateFlow()
+
+    // ─── PROFILS ──────────────────────────────────────────────────────
     private val _activeProfile = MutableStateFlow(profileManager.getActiveProfile())
     val activeProfile: StateFlow<BlockingProfile> = _activeProfile
 
     private val _vacationConfig = MutableStateFlow(profileManager.getVacationConfig())
     val vacationConfig: StateFlow<VacationConfig> = _vacationConfig
 
+    private val _workDndEnabled = MutableStateFlow(profileManager.isDndEnabled(BlockingProfile.WORK))
+    val workDndEnabled: StateFlow<Boolean> = _workDndEnabled
+
+    private val _workDndStart = MutableStateFlow(profileManager.getDndStart(BlockingProfile.WORK))
+    val workDndStart: StateFlow<Int> = _workDndStart
+
+    private val _workDndEnd = MutableStateFlow(profileManager.getDndEnd(BlockingProfile.WORK))
+    val workDndEnd: StateFlow<Int> = _workDndEnd
+
+    private val _homeDndEnabled = MutableStateFlow(profileManager.isDndEnabled(BlockingProfile.HOME))
+    val homeDndEnabled: StateFlow<Boolean> = _homeDndEnabled
+
+    private val _homeDndStart = MutableStateFlow(profileManager.getDndStart(BlockingProfile.HOME))
+    val homeDndStart: StateFlow<Int> = _homeDndStart
+
+    private val _homeDndEnd = MutableStateFlow(profileManager.getDndEnd(BlockingProfile.HOME))
+    val homeDndEnd: StateFlow<Int> = _homeDndEnd
+
     private val _dialpadNumber = MutableStateFlow("")
     val dialpadNumber: StateFlow<String> = _dialpadNumber
 
     private var isLoadingData = false
 
-    // ─────────────────────────────────────────────
-    // BROADCAST RECEIVER
-    // ─────────────────────────────────────────────
+    // ─── BROADCAST RECEIVER ───────────────────────────────────────────
     private val globalUpdateReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             when (intent.action) {
@@ -134,49 +177,37 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    // ─────────────────────────────────────────────
-    // INIT
-    // ─────────────────────────────────────────────
+    // ─── INIT ─────────────────────────────────────────────────────────
     init {
-        // Historique des appels bloqués
+        instance = this
         viewModelScope.launch {
-            db.blockedCallDao().getAllBlockedCalls().collectLatest {
-                _blockedCalls.value = it
-            }
+            db.blockedCallDao().getAllBlockedCalls().collectLatest { _blockedCalls.value = it }
         }
-        // ✅ Liste noire active — manquait dans l'original
         viewModelScope.launch {
-            db.blockedNumberDao().getAll().collectLatest {
-                _blockedNumbers.value = it
-            }
+            db.blockedNumberDao().getAll().collectLatest { _blockedNumbers.value = it }
         }
-        // Notes d'appels
         viewModelScope.launch {
             db.callNoteDao().getAllNotes().collectLatest {
                 _notes.value = it.associate { note -> note.number to note.note }
             }
         }
-        // Broadcast receiver
         val filter = IntentFilter().apply {
             addAction(BlockedCallActionReceiver.ACTION_WHITELIST_UPDATED)
             addAction(VoicemailSmsReceiver.ACTION_VOICEMAIL_RECEIVED)
         }
         ContextCompat.registerReceiver(
-            app, globalUpdateReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED
+            app, globalUpdateReceiver, filter,
+            ContextCompat.RECEIVER_NOT_EXPORTED
         )
     }
 
-    // ─────────────────────────────────────────────
-    // RÉPONDEUR
-    // ─────────────────────────────────────────────
+    // ─── RÉPONDEUR ────────────────────────────────────────────────────
     fun clearVoicemailIndicator() {
         _hasNewVoicemail.value = false
         prefs.edit().putBoolean("has_voicemail", false).apply()
     }
 
-    // ─────────────────────────────────────────────
-    // CHARGEMENT CONTACTS & APPELS
-    // ─────────────────────────────────────────────
+    // ─── CHARGEMENT ───────────────────────────────────────────────────
     fun loadData(ctx: Context) {
         if (isLoadingData) return
         isLoadingData = true
@@ -189,7 +220,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 withContext(Dispatchers.Main) {
                     _callGroups.value  = groups
                     _contacts.value    = contactsList
-                    _favorites.value   = contactsList.filter { it.isFavorite }.sortedByDescending { it.callCount }
+                    _favorites.value   = contactsList
+                        .filter { it.isFavorite }
+                        .sortedByDescending { it.callCount }
                     _isLoading.value   = false
                 }
                 checkReportedNumbers(groups.map { it.number })
@@ -203,9 +236,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun forceReload(ctx: Context) = loadData(ctx)
 
-    // ─────────────────────────────────────────────
-    // RECHERCHE & CLAVIER
-    // ─────────────────────────────────────────────
+    // ─── RECHERCHE & CLAVIER ──────────────────────────────────────────
     fun setSearchQuery(q: String) { _searchQuery.value = q }
     fun setDialpadNumber(number: String) { _dialpadNumber.value = number }
     fun clearDialpadNumber() { _dialpadNumber.value = "" }
@@ -224,43 +255,23 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         return _contacts.value.filter { it.name.lowercase().contains(q) }
     }
 
-    // ─────────────────────────────────────────────
-    // ACTIONS LISTE NOIRE (blocked_numbers)
-    // ─────────────────────────────────────────────
-
-    /**
-     * Ajoute un numéro à la liste noire active.
-     * Normalise le numéro avant insertion.
-     */
+    // ─── LISTE NOIRE ──────────────────────────────────────────────────
     fun blockNumber(rawNumber: String, label: String = "") {
         viewModelScope.launch(Dispatchers.IO) {
-            val normalized = normalize(rawNumber)
             db.blockedNumberDao().insert(
-                BlockedNumber(number = normalized, label = label)
+                BlockedNumber(number = normalize(rawNumber), label = label)
             )
         }
     }
 
-    /**
-     * Supprime un numéro de la liste noire active.
-     * C'est le vrai "déblocage" — utilisé par BlockedNumbersScreen.
-     */
     fun unblockNumber(entry: BlockedNumber) {
-        viewModelScope.launch(Dispatchers.IO) {
-            db.blockedNumberDao().delete(entry)
-        }
+        viewModelScope.launch(Dispatchers.IO) { db.blockedNumberDao().delete(entry) }
     }
 
-    /**
-     * Vérifie si un numéro est dans la liste noire active.
-     * Teste les deux formats (+33 et 0X) pour éviter les faux négatifs.
-     */
     suspend fun isNumberBlocked(rawNumber: String): Boolean {
         val normalized = normalize(rawNumber)
-        val alt = if (normalized.startsWith("+33"))
-            "0" + normalized.substring(3)
-        else if (normalized.startsWith("0"))
-            "+33" + normalized.substring(1)
+        val alt = if (normalized.startsWith("+33")) "0" + normalized.substring(3)
+        else if (normalized.startsWith("0")) "+33" + normalized.substring(1)
         else null
         return withContext(Dispatchers.IO) {
             db.blockedNumberDao().isBlocked(normalized) > 0 ||
@@ -268,18 +279,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    // ─────────────────────────────────────────────
-    // ACTIONS HISTORIQUE (blocked_calls)
-    // ─────────────────────────────────────────────
-
-    /**
-     * Supprime une entrée de l'historique des appels bloqués.
-     * Ne touche PAS à la liste noire active.
-     */
+    // ─── HISTORIQUE ───────────────────────────────────────────────────
     fun deleteBlockedCall(call: BlockedCall) {
-        viewModelScope.launch(Dispatchers.IO) {
-            db.blockedCallDao().delete(call)
-        }
+        viewModelScope.launch(Dispatchers.IO) { db.blockedCallDao().delete(call) }
     }
 
     fun removeCallGroup(number: String) {
@@ -295,49 +297,26 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    // ─────────────────────────────────────────────
-    // SIGNALEMENT COMMUNAUTAIRE
-    // ─────────────────────────────────────────────
-
-    /**
-     * Signale un numéro :
-     * 1. L'ajoute à la liste noire active (blocked_numbers) ✅
-     * 2. L'enregistre dans l'historique (blocked_calls)     ✅
-     * 3. Le remonte au serveur Supabase                     ✅
-     */
+    // ─── SIGNALEMENT ──────────────────────────────────────────────────
     fun reportNumber(number: String, tag: String = "indésirable") {
         viewModelScope.launch {
             val normalized = normalize(number)
             withContext(Dispatchers.IO) {
-                // ✅ Liste noire active
                 db.blockedNumberDao().insert(
                     BlockedNumber(number = normalized, label = "Signalé: $tag")
                 )
-                // ✅ Historique
                 db.blockedCallDao().insert(
-                    BlockedCall(
-                        number    = normalized,
-                        reason    = "Signalé: $tag",
-                        riskLevel = "SPAM"
-                    )
+                    BlockedCall(number = normalized, reason = "Signalé: $tag", riskLevel = "SPAM")
                 )
             }
             _reportFeedback.value = "⏳ Signalement..."
             val result = reportRepo.reportNumber(normalized, tag)
-            _reportFeedback.value = if (result.isSuccess) "✅ Signalé et Bloqué" else "⚠️ Bloqué localement"
+            _reportFeedback.value =
+                if (result.isSuccess) "✅ Signalé et Bloqué" else "⚠️ Bloqué localement"
         }
     }
 
-    // ─────────────────────────────────────────────
-    // GESTION APPEL CONTACT MULTI-NUMÉROS
-    // ─────────────────────────────────────────────
-
-    /**
-     * Demande à appeler un contact.
-     * - 0 numéro  → rien
-     * - 1 numéro  → appel direct
-     * - 2+ numéros → affiche le sélecteur
-     */
+    // ─── APPEL MULTI-NUMÉROS ──────────────────────────────────────────
     fun requestCall(contact: Contact, onCall: (String) -> Unit) {
         when (contact.phoneNumbers.size) {
             0    -> Unit
@@ -346,34 +325,31 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Ferme le sélecteur de numéro sans appeler. */
-    fun dismissPendingCall() {
-        _pendingCallContact.value = null
-    }
+    fun dismissPendingCall() { _pendingCallContact.value = null }
 
-    /** Appelle un numéro spécifique du contact en attente. */
     fun callPendingContactNumber(phoneNumber: String, onCall: (String) -> Unit) {
-        _pendingCallContact.value?.let { contact ->
-            if (contact.phoneNumbers.contains(phoneNumber)) onCall(phoneNumber)
+        _pendingCallContact.value?.let {
+            if (it.phoneNumbers.contains(phoneNumber)) onCall(phoneNumber)
         }
         dismissPendingCall()
     }
 
-    // ─────────────────────────────────────────────
-    // FAVORIS & NOTES
-    // ─────────────────────────────────────────────
+    // ─── FAVORIS & NOTES ──────────────────────────────────────────────
     fun toggleFavorite(number: String) {
         viewModelScope.launch {
             val key    = PhoneUtils.groupKey(number)
             val favIds = getFavoriteIds().toMutableSet()
             if (favIds.contains(key)) favIds.remove(key) else favIds.add(key)
-            withContext(Dispatchers.IO) { prefs.edit().putStringSet("favorites", favIds).commit() }
+            withContext(Dispatchers.IO) {
+                prefs.edit().putStringSet("favorites", favIds).commit()
+            }
             val updated = _contacts.value.map { c ->
-                val isFav = c.phoneNumbers.any { PhoneUtils.groupKey(it) in favIds }
-                c.copy(isFavorite = isFav)
+                c.copy(isFavorite = c.phoneNumbers.any { PhoneUtils.groupKey(it) in favIds })
             }
             _contacts.value  = updated
-            _favorites.value = updated.filter { it.isFavorite }.sortedByDescending { it.callCount }
+            _favorites.value = updated
+                .filter { it.isFavorite }
+                .sortedByDescending { it.callCount }
         }
     }
 
@@ -385,41 +361,42 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    // ─────────────────────────────────────────────
-    // WHITELIST
-    // ─────────────────────────────────────────────
-    fun refreshWhitelist() { _whitelist.value = spamDetector.getWhitelist() }
-
-    fun addToWhitelist(number: String) {
-        spamDetector.addToWhitelist(normalize(number))
-        refreshWhitelist()
-    }
-
-    fun removeFromWhitelist(number: String) {
-        spamDetector.removeFromWhitelist(normalize(number))
-        refreshWhitelist()
-    }
-
-    fun isWhitelisted(number: String) = spamDetector.isWhitelisted(normalize(number))
-
+    // ─── WHITELIST UTILISATEUR ────────────────────────────────────────
+    fun refreshWhitelist()                  { _whitelist.value = spamDetector.getWhitelist() }
+    fun addToWhitelist(number: String)      { spamDetector.addToWhitelist(normalize(number)); refreshWhitelist() }
+    fun removeFromWhitelist(number: String) { spamDetector.removeFromWhitelist(normalize(number)); refreshWhitelist() }
+    fun isWhitelisted(number: String)       = spamDetector.isWhitelisted(normalize(number))
     fun buildNumberToNameMap(): Map<String, String> =
         _contacts.value.flatMap { c -> getContactNumbers(c).map { it to c.name } }.toMap()
 
-    // ─────────────────────────────────────────────
-    // SETTERS PARAMÈTRES
-    // ─────────────────────────────────────────────
-    fun setBlockPrivate(b: Boolean)        { spamDetector.setBlockPrivateNumbers(b); _blockPrivate.value = b }
-    fun setHideBlocked(b: Boolean)         { prefs.edit().putBoolean("hide_blocked", b).apply(); _hideBlocked.value = b }
-    fun setDoNotDisturb(e: Boolean)        { spamDetector.setDoNotDisturb(e); _doNotDisturb.value = e }
-    fun setScheduleEnabled(e: Boolean)     { spamDetector.setScheduleEnabled(e); _scheduleEnabled.value = e }
-    fun setScheduleStartHour(h: Int)       { spamDetector.setScheduleStartHour(h); _scheduleStartHour.value = h }
-    fun setScheduleStartMinute(m: Int)     { spamDetector.setScheduleStartMinute(m); _scheduleStartMinute.value = m }
-    fun setScheduleEndHour(h: Int)         { spamDetector.setScheduleEndHour(h); _scheduleEndHour.value = h }
-    fun setScheduleEndMinute(m: Int)       { spamDetector.setScheduleEndMinute(m); _scheduleEndMinute.value = m }
+    // ─── SETTERS PARAMÈTRES ───────────────────────────────────────────
+    fun setBlockPrivate(b: Boolean)    { spamDetector.setBlockPrivateNumbers(b); _blockPrivate.value = b }
+    fun setHideBlocked(b: Boolean)     { prefs.edit().putBoolean("hide_blocked", b).apply(); _hideBlocked.value = b }
+    fun setDoNotDisturb(b: Boolean)    { prefs.edit().putBoolean("do_not_disturb", b).apply(); _doNotDisturb.value = b }
+    fun setScheduleEnabled(e: Boolean) { spamDetector.setScheduleEnabled(e); _scheduleEnabled.value = e }
+    fun setScheduleStartHour(h: Int)   { spamDetector.setScheduleStartHour(h); _scheduleStartHour.value = h }
+    fun setScheduleStartMinute(m: Int) { spamDetector.setScheduleStartMinute(m); _scheduleStartMinute.value = m }
+    fun setScheduleEndHour(h: Int)     { spamDetector.setScheduleEndHour(h); _scheduleEndHour.value = h }
+    fun setScheduleEndMinute(m: Int)   { spamDetector.setScheduleEndMinute(m); _scheduleEndMinute.value = m }
 
-    // ─────────────────────────────────────────────
-    // SETTERS PROFILS
-    // ─────────────────────────────────────────────
+    fun setCommunityBlockEnabled(enabled: Boolean) {
+        spamDetector.setCommunityBlockEnabled(enabled)
+        _communityBlockEnabled.value = enabled
+    }
+
+    // ─── SETTER WHITELIST HÔPITAUX ────────────────────────────────────
+    fun setHospitalWhitelistEnabled(enabled: Boolean) {
+        _hospitalWhitelistEnabled.value = enabled
+        prefs.edit().putBoolean(PREF_HOSPITAL_WHITELIST, enabled).apply()
+    }
+
+    // ─── SETTER MODE POPUP APPEL ──────────────────────────────────────
+    fun setCallPopupMode(mode: CallPopupMode) {
+        prefs.edit().putString(PREF_POPUP_MODE, mode.name).apply()
+        _callPopupMode.value = mode
+    }
+
+    // ─── SETTERS PROFILS ──────────────────────────────────────────────
     fun setActiveProfile(profile: BlockingProfile) {
         profileManager.setActiveProfile(profile)
         _activeProfile.value = profileManager.getActiveProfile()
@@ -435,12 +412,20 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _vacationConfig.value = _vacationConfig.value.copy(endTimestamp = -1L)
     }
 
-    // ─────────────────────────────────────────────
-    // UTILS PRIVÉS
-    // ─────────────────────────────────────────────
+    fun setWorkDndEnabled(e: Boolean) { profileManager.setDndEnabled(BlockingProfile.WORK, e); _workDndEnabled.value = e }
+    fun setWorkDndStart(h: Int)       { profileManager.setDndStart(BlockingProfile.WORK, h); _workDndStart.value = h }
+    fun setWorkDndEnd(h: Int)         { profileManager.setDndEnd(BlockingProfile.WORK, h); _workDndEnd.value = h }
+
+    fun setHomeDndEnabled(e: Boolean) { profileManager.setDndEnabled(BlockingProfile.HOME, e); _homeDndEnabled.value = e }
+    fun setHomeDndStart(h: Int)       { profileManager.setDndStart(BlockingProfile.HOME, h); _homeDndStart.value = h }
+    fun setHomeDndEnd(h: Int)         { profileManager.setDndEnd(BlockingProfile.HOME, h); _homeDndEnd.value = h }
+
+    // ─── UTILS PRIVÉS ─────────────────────────────────────────────────
     private fun normalize(number: String?) = PhoneUtils.normalizeNumber(number ?: "")
-    private fun getContactNumbers(contact: Contact): List<String> = contact.phoneNumbers.map { normalize(it) }
-    private fun getFavoriteIds(): Set<String> = prefs.getStringSet("favorites", emptySet()) ?: emptySet()
+    private fun getContactNumbers(contact: Contact): List<String> =
+        contact.phoneNumbers.map { normalize(it) }
+    private fun getFavoriteIds(): Set<String> =
+        prefs.getStringSet("favorites", emptySet()) ?: emptySet()
 
     suspend fun getTopReported() = reportRepo.getTopReported()
 
@@ -448,8 +433,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch(Dispatchers.IO) {
             val map            = mutableMapOf<String, ReportedNumber>()
             val communityBlock = mutableSetOf<String>()
-            numbers
-                .map { normalize(it) }
+            numbers.map { normalize(it) }
                 .filter { it.isNotBlank() }
                 .distinct()
                 .take(15)
@@ -469,11 +453,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    // ─────────────────────────────────────────────
-    // LIFECYCLE
-    // ─────────────────────────────────────────────
+    // ─── LIFECYCLE ────────────────────────────────────────────────────
     override fun onCleared() {
         super.onCleared()
+        if (instance == this) instance = null
         try {
             getApplication<Application>().unregisterReceiver(globalUpdateReceiver)
         } catch (e: Exception) {

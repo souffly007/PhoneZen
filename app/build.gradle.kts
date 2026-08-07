@@ -19,7 +19,7 @@ android {
         minSdk        = 24
         targetSdk     = 35
         versionCode   = 1
-        versionName   = "1.4b"
+        versionName   = "1.4e"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -32,6 +32,18 @@ android {
 
         buildConfigField("String", "SUPABASE_URL", "\"${localProperties.getProperty("supabase_url", "")}\"")
         buildConfigField("String", "SUPABASE_ANON_KEY", "\"${localProperties.getProperty("supabase_anon_key", "")}\"")
+    }
+
+    packaging {
+        resources {
+            excludes += setOf(
+                "META-INF/NOTICE.md",
+                "META-INF/LICENSE.md",
+                "META-INF/NOTICE",
+                "META-INF/LICENSE",
+                "META-INF/DEPENDENCIES"
+            )
+        }
     }
 
     buildTypes {
@@ -73,11 +85,12 @@ dependencies {
 
     // Core
     implementation("androidx.appcompat:appcompat:1.6.1")
-    implementation("androidx.core:core-ktx:1.12.0")
+    implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
     implementation("androidx.activity:activity-compose:1.8.2")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.2")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 
     // Compose
     implementation("androidx.compose.ui:ui")
@@ -105,4 +118,14 @@ dependencies {
     implementation("io.coil-kt:coil-compose:2.6.0")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
+
+    // WorkManager Kotlin
+    implementation("androidx.work:work-runtime-ktx:2.9.1")
+
+    // JavaMail pour Android (IMAP)
+    implementation("com.sun.mail:android-mail:1.6.7")
+    implementation("com.sun.mail:android-activation:1.6.7")
+
+    implementation("com.google.android.gms:play-services-location:21.3.0")
+
 }

@@ -77,6 +77,19 @@ fun ThemeSelectorScreen(
             },
             onClick     = { themeVm.setTheme(AppTheme.ZEN_LIGHT) }
         )
+
+        Spacer(Modifier.height(16.dp))
+
+        // ── Carte Cyanogen ──
+        ThemeCard(
+            label       = "Cyanogen",
+            description = "Hommage à la ROM culte — noir profond & cyan électrique",
+            selected    = current == AppTheme.CYANOGEN,
+            preview     = {
+                CyanogenPreview()
+            },
+            onClick     = { themeVm.setTheme(AppTheme.CYANOGEN) }
+        )
     }
 }
 
@@ -274,6 +287,75 @@ private fun ZenLightPreview() {
                     ),
                     RoundedCornerShape(50)
                 )
+        )
+    }
+}
+
+// ── Miniature Cyanogen ──
+@Composable
+private fun CyanogenPreview() {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF000000))
+    ) {
+        Column(modifier = Modifier.padding(8.dp)) {
+            // Fausse barre de titre
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(24.dp)
+                        .background(Color(0xFF00BCD4).copy(alpha = 0.15f), RoundedCornerShape(50))
+                )
+                Spacer(Modifier.width(8.dp))
+                Box(
+                    modifier = Modifier
+                        .height(10.dp)
+                        .width(80.dp)
+                        .background(Color(0xFF00BCD4).copy(alpha = 0.8f), RoundedCornerShape(4.dp))
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+            // Fausses lignes de liste
+            repeat(3) {
+                Row(
+                    modifier = Modifier.padding(vertical = 3.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(18.dp)
+                            .background(Color(0xFF0A0A0A), RoundedCornerShape(50))
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Box(
+                        modifier = Modifier
+                            .height(8.dp)
+                            .fillMaxWidth(0.6f)
+                            .background(Color(0xFF1A3A3D), RoundedCornerShape(4.dp))
+                    )
+                }
+            }
+        }
+        // Accent cyan + touche orange en bas à droite, façon "Cid"
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(8.dp)
+                .size(28.dp)
+                .background(
+                    Brush.radialGradient(
+                        listOf(Color(0xFF00BCD4).copy(alpha = 0.55f), Color.Transparent)
+                    ),
+                    RoundedCornerShape(50)
+                )
+        )
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .padding(8.dp)
+                .size(10.dp)
+                .background(Color(0xFFFF6D00).copy(alpha = 0.7f), RoundedCornerShape(50))
         )
     }
 }

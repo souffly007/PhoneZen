@@ -73,6 +73,40 @@ private val ZenLight = lightColorScheme(
 )
 
 // ──────────────────────────────────────────
+//  PALETTE CYANOGEN (hommage à CyanogenMod)
+//  Noir profond + cyan électrique signature "Cid",
+//  accent orange façon anciens settings CM.
+// ──────────────────────────────────────────
+private val _CyanoBackground  = Color(0xFF000000)
+private val _CyanoSurface     = Color(0xFF0A0A0A)
+private val _CyanoSurfaceVar  = Color(0xFF141414)
+private val _CyanoNeonCyan    = Color(0xFF00BCD4)
+private val _CyanoNeonOrange  = Color(0xFFFF6D00)
+private val _CyanoNeonGreen   = Color(0xFF64DD17)
+private val _CyanoNeonRed     = Color(0xFFE53935)
+private val _CyanoNeonYellow  = Color(0xFFFFD600)
+private val _CyanoGradStart   = Color(0xFF006064)
+private val _CyanoTextPrimary = Color(0xFFECEFF1)
+private val _CyanoTextSecond  = Color(0xFF80CBC4)
+private val _CyanoGlassStroke = Color(0xFF1A3A3D)
+
+private val Cyanogen = darkColorScheme(
+    primary          = _CyanoNeonCyan,
+    onPrimary        = _CyanoBackground,
+    primaryContainer = _CyanoGradStart,
+    secondary        = _CyanoNeonOrange,
+    onSecondary      = _CyanoBackground,
+    background       = _CyanoBackground,
+    onBackground     = _CyanoTextPrimary,
+    surface          = _CyanoSurface,
+    onSurface        = _CyanoTextPrimary,
+    surfaceVariant   = _CyanoSurfaceVar,
+    onSurfaceVariant = _CyanoTextSecond,
+    error            = _CyanoNeonRed,
+    outline          = _CyanoGlassStroke,
+)
+
+// ──────────────────────────────────────────
 //  AppColors : objet porté par CompositionLocal
 // ──────────────────────────────────────────
 @Immutable
@@ -121,6 +155,21 @@ private val LightColors = AppColors(
     glassStroke = _ZenStroke,
 )
 
+private val CyanogenColors = AppColors(
+    background  = _CyanoBackground,
+    surface     = _CyanoSurface,
+    surfaceVar  = _CyanoSurfaceVar,
+    neonCyan    = _CyanoNeonCyan,
+    neonOrange  = _CyanoNeonOrange,
+    neonGreen   = _CyanoNeonGreen,
+    neonRed     = _CyanoNeonRed,
+    neonYellow  = _CyanoNeonYellow,
+    gradStart   = _CyanoGradStart,
+    textPrimary = _CyanoTextPrimary,
+    textSecond  = _CyanoTextSecond,
+    glassStroke = _CyanoGlassStroke,
+)
+
 val LocalColors = staticCompositionLocalOf { DarkColors }
 
 // ──────────────────────────────────────────
@@ -152,10 +201,19 @@ val ZenStroke      = _ZenStroke
 val ZenTextPrimary = _ZenTextPrimary
 val ZenTextSecond  = _ZenTextSecond
 
+// Couleurs Cyanogen exposées pour ThemeSelectorScreen
+val CyanoNeonCyan    = _CyanoNeonCyan
+val CyanoNeonOrange  = _CyanoNeonOrange
+val CyanoBackground  = _CyanoBackground
+val CyanoSurfaceVar  = _CyanoSurfaceVar
+val CyanoGlassStroke = _CyanoGlassStroke
+val CyanoTextPrimary = _CyanoTextPrimary
+val CyanoTextSecond  = _CyanoTextSecond
+
 // ──────────────────────────────────────────
 //  ENUM & COMPOSABLE PRINCIPAL
 // ──────────────────────────────────────────
-enum class AppTheme { CYBER_DARK, ZEN_LIGHT }
+enum class AppTheme { CYBER_DARK, ZEN_LIGHT, CYANOGEN }
 
 @Composable
 fun PhoneZenTheme(
@@ -165,10 +223,12 @@ fun PhoneZenTheme(
     val colorScheme = when (appTheme) {
         AppTheme.CYBER_DARK -> CyberDark
         AppTheme.ZEN_LIGHT  -> ZenLight
+        AppTheme.CYANOGEN   -> Cyanogen
     }
     val appColors = when (appTheme) {
         AppTheme.CYBER_DARK -> DarkColors
         AppTheme.ZEN_LIGHT  -> LightColors
+        AppTheme.CYANOGEN   -> CyanogenColors
     }
     CompositionLocalProvider(LocalColors provides appColors) {
         MaterialTheme(colorScheme = colorScheme, content = content)

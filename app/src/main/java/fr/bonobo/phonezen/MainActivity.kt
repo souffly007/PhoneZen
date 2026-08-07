@@ -31,6 +31,9 @@ import fr.bonobo.phonezen.viewmodel.ThemeViewModel
 import fr.bonobo.phonezen.ui.screens.InCallActivity
 import fr.bonobo.phonezen.service.VoicemailListener
 import fr.bonobo.phonezen.utils.VoicemailNotificationHelper
+import fr.bonobo.phonezen.data.model.CallStatus
+import android.telecom.Call
+import fr.bonobo.phonezen.service.CallManager
 
 class MainActivity : ComponentActivity() {
 
@@ -38,12 +41,20 @@ class MainActivity : ComponentActivity() {
     private val themeVm: ThemeViewModel by viewModels()
     private var rolesRequested = false
 
-    // ── États onboarding (Compose observe ces variables) ──
+    private val callListener: (Call?, CallStatus) -> Unit = { _, status ->
+        if (status == CallStatus.DIALING) {
+            Log.d("MainActivity", "Statut DIALING détecté → masquage de l'UI principale")
+            // moveTaskToBack(true)
+        }
+    }
+
     private var isDialerGranted    by mutableStateOf(false)
     private var isScreeningGranted by mutableStateOf(false)
     private var isContactsGranted  by mutableStateOf(false)
 
-    // Liste complète des permissions nécessaires
+    // FIX : RECEIVE_SMS / READ_SMS retirés — copiés par erreur depuis PhoneZen SMS,
+    // n'ont rien à faire dans le dialer et empêchaient ces lignes de servir à
+    // quoi que ce soit (permissions non déclarées dans ce manifest).
     private val requiredPermissions = mutableListOf(
         Manifest.permission.READ_CALL_LOG,
         Manifest.permission.WRITE_CALL_LOG,
@@ -52,12 +63,15 @@ class MainActivity : ComponentActivity() {
         Manifest.permission.CALL_PHONE,
         Manifest.permission.READ_PHONE_STATE,
         Manifest.permission.ANSWER_PHONE_CALLS,
-        Manifest.permission.RECEIVE_SMS,
-        Manifest.permission.READ_SMS,
-        Manifest.permission.VIBRATE
+        Manifest.permission.VIBRATE,
+        Manifest.permission.BLUETOOTH,
+        Manifest.permission.MODIFY_AUDIO_SETTINGS
     ).apply {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             add(Manifest.permission.POST_NOTIFICATIONS)
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            add(Manifest.permission.BLUETOOTH_CONNECT)
         }
     }.toTypedArray()
 
@@ -83,8 +97,6 @@ class MainActivity : ComponentActivity() {
         Log.d("MainActivity", "onCreate")
 
         VoicemailNotificationHelper.createChannel(this)
-
-        // Calcul initial des états avant le premier setContent
         refreshRoleStates()
 
         setContent {
@@ -110,12 +122,19 @@ class MainActivity : ComponentActivity() {
         handleDialIntent(intent)
     }
 
+    override fun onStart() {
+        super.onStart()
+        CallManager.addListener(callListener)
+    }
+
+    override fun onStop() {
+        super.onStop()
+        CallManager.removeListener(callListener)
+    }
+
     override fun onResume() {
         super.onResume()
         Log.d("MainActivity", "onResume")
-
-        // Met à jour les états onboarding quand l'utilisateur revient
-        // d'un dialog système (rôle accordé ou refusé)
         refreshRoleStates()
 
         if (rolesReady()) {
@@ -125,10 +144,6 @@ class MainActivity : ComponentActivity() {
         checkForOngoingCall()
         checkVoicemailStatus()
     }
-
-    // ══════════════════════════════════════════════════════════════
-    // INTENT tel: (lien depuis navigateur ou autre app)
-    // ══════════════════════════════════════════════════════════════
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
@@ -161,11 +176,12 @@ class MainActivity : ComponentActivity() {
         Log.d("MainActivity", "launchCall: $number")
         try {
             cacheContactName(number)
-            val intent = Intent(Intent.ACTION_CALL).apply {
-                data = Uri.fromParts("tel", number, null)
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-            startActivity(intent)
+
+            // InCallActivity sera lancée par onCallAdded dans PhoneZenInCallService
+            val telecomManager = getSystemService(Context.TELECOM_SERVICE) as TelecomManager
+            telecomManager.placeCall(Uri.fromParts("tel", number, null), Bundle())
+
+            moveTaskToBack(true)
         } catch (e: SecurityException) {
             Log.e("MainActivity", "Permission CALL_PHONE manquante, ouverture du dialer")
             startActivity(Intent(Intent.ACTION_DIAL).apply {
@@ -173,6 +189,9 @@ class MainActivity : ComponentActivity() {
             })
         } catch (e: Exception) {
             Log.e("MainActivity", "Erreur appel: ${e.message}")
+            startActivity(Intent(Intent.ACTION_DIAL).apply {
+                data = Uri.fromParts("tel", number, null)
+            })
         }
     }
 
@@ -191,16 +210,17 @@ class MainActivity : ComponentActivity() {
         }
 
         try {
-            val telecomManager     = getSystemService(Context.TELECOM_SERVICE) as TelecomManager
+            val telecomManager = getSystemService(Context.TELECOM_SERVICE) as TelecomManager
             val phoneAccountHandle = getPhoneAccountHandle(subscriptionId)
 
             if (phoneAccountHandle != null) {
-                val intent = Intent(Intent.ACTION_CALL).apply {
-                    data = Uri.fromParts("tel", number, null)
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    putExtra(TelecomManager.EXTRA_PHONE_ACCOUNT_HANDLE, phoneAccountHandle)
+                // InCallActivity sera lancée par onCallAdded dans PhoneZenInCallService
+                val extras = Bundle().apply {
+                    putParcelable(TelecomManager.EXTRA_PHONE_ACCOUNT_HANDLE, phoneAccountHandle)
                 }
-                startActivity(intent)
+                telecomManager.placeCall(Uri.fromParts("tel", number, null), extras)
+
+                moveTaskToBack(true)
                 Log.d("MainActivity", "Appel via SIM $subscriptionId lancé")
             } else {
                 Log.w("MainActivity", "PhoneAccountHandle non trouvé pour SIM $subscriptionId")
@@ -320,10 +340,6 @@ class MainActivity : ComponentActivity() {
     // PERMISSIONS & RÔLES
     // ══════════════════════════════════════════════════════════════
 
-    /**
-     * Met à jour les états observables isDialerGranted / isScreeningGranted / isContactsGranted.
-     * Appelé dans onCreate, onResume et après chaque résultat de roleLauncher.
-     */
     private fun refreshRoleStates() {
         isContactsGranted = ContextCompat.checkSelfPermission(
             this, Manifest.permission.READ_CONTACTS
@@ -334,7 +350,6 @@ class MainActivity : ComponentActivity() {
             isDialerGranted    = roleManager.isRoleHeld(RoleManager.ROLE_DIALER)
             isScreeningGranted = roleManager.isRoleHeld(RoleManager.ROLE_CALL_SCREENING)
         } else {
-            // Avant Android 10, les rôles n'existent pas → on considère tout OK
             isDialerGranted    = true
             isScreeningGranted = true
         }
@@ -363,8 +378,6 @@ class MainActivity : ComponentActivity() {
         preloadContactCache()
         refreshRoleStates()
     }
-
-    // ── Demandes individuelles (appelées depuis l'onboarding) ──
 
     private fun requestDialerRole() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return
@@ -425,33 +438,33 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         private val VOICEMAIL_NUMBERS = mapOf(
-            "orange"              to "888",
-            "sosh"                to "888",
-            "sfr"                 to "123",
-            "red"                 to "123",
-            "red by sfr"          to "123",
-            "bouygues"            to "660",
-            "bouygues telecom"    to "660",
-            "b&you"               to "660",
-            "free"                to "666",
-            "free mobile"         to "666",
-            "syma"                to "888",
-            "syma mobile"         to "888",
-            "youprice"            to "888",
-            "la poste mobile"     to "123",
-            "la poste"            to "123",
-            "prixtel"             to "123",
-            "coriolis"            to "123",
-            "réglo mobile"        to "123",
-            "réglo"               to "123",
-            "nrj mobile"          to "660",
-            "nrj"                 to "660",
-            "cic mobile"          to "660",
+            "orange"               to "888",
+            "sosh"                 to "888",
+            "sfr"                  to "123",
+            "red"                  to "123",
+            "red by sfr"           to "123",
+            "bouygues"             to "660",
+            "bouygues telecom"     to "660",
+            "b&you"                to "660",
+            "free"                 to "666",
+            "free mobile"          to "666",
+            "syma"                 to "888",
+            "syma mobile"          to "888",
+            "youprice"             to "888",
+            "la poste mobile"      to "123",
+            "la poste"             to "123",
+            "prixtel"              to "123",
+            "coriolis"             to "123",
+            "réglo mobile"         to "123",
+            "réglo"                to "123",
+            "nrj mobile"           to "660",
+            "nrj"                  to "660",
+            "cic mobile"           to "660",
             "crédit mutuel mobile" to "660",
-            "auchan telecom"      to "660",
-            "cdiscount mobile"    to "660",
-            "lebara"              to "5765",
-            "lycamobile"          to "121"
+            "auchan telecom"       to "660",
+            "cdiscount mobile"     to "660",
+            "lebara"               to "5765",
+            "lycamobile"           to "121"
         )
     }
 }

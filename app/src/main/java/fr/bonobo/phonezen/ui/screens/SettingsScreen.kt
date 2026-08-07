@@ -25,6 +25,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import fr.bonobo.phonezen.data.model.BlockingProfile
+import androidx.core.content.FileProvider
+import fr.bonobo.phonezen.data.model.CallPopupMode
+import fr.bonobo.phonezen.utils.CrashHandler
 import fr.bonobo.phonezen.ui.theme.*
 import fr.bonobo.phonezen.utils.BackupManager
 import fr.bonobo.phonezen.viewmodel.MainViewModel
@@ -38,7 +41,7 @@ fun SettingsScreen(
     onNavigateToWhitelist  : () -> Unit = {},
     onNavigateToTheme      : () -> Unit = {},
     onNavigateToTopReported: () -> Unit = {},
-    onNavigateToProfiles   : () -> Unit = {}   // ← NOUVEAU
+    onNavigateToProfiles   : () -> Unit = {}
 ) {
     val c                = LocalColors.current
     val ctx              = LocalContext.current
@@ -52,10 +55,12 @@ fun SettingsScreen(
     val scheduleEndH     by vm.scheduleEndHour.collectAsState()
     val scheduleEndM     by vm.scheduleEndMinute.collectAsState()
     val currentTheme     by themeVm.theme.collectAsState()
-
-    // ── Profil actif (pour le badge dans le résumé) ──
     val activeProfile    by vm.activeProfile.collectAsState()
     val vacationConfig   by vm.vacationConfig.collectAsState()
+    val callPopupMode    by vm.callPopupMode.collectAsState()
+
+    val hospitalEnabled  by vm.hospitalWhitelistEnabled.collectAsState()
+    val hospitalCount    by vm.hospitalEntriesCount.collectAsState()
 
     var showStartPicker  by remember { mutableStateOf(false) }
     var showEndPicker    by remember { mutableStateOf(false) }
@@ -78,6 +83,10 @@ fun SettingsScreen(
         }
     }
 
+    // Vérification permission overlay (SYSTEM_ALERT_WINDOW)
+    val canDrawOverlays = remember { mutableStateOf(Settings.canDrawOverlays(ctx)) }
+    val hasCrashReport  = remember { mutableStateOf(CrashHandler.hasCrashReports(ctx)) }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -87,11 +96,10 @@ fun SettingsScreen(
         SettingsTopBar("Réglages")
 
         // ══════════════════════════════════════════════════════════════
-        // PROFILS DE BLOCAGE (nouvelle section en tête)
+        // PROFILS DE BLOCAGE
         // ══════════════════════════════════════════════════════════════
         SectionHeader("👤 Profil de blocage")
 
-        // ── Mini-résumé du profil actif cliquable ──
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -104,7 +112,6 @@ fun SettingsScreen(
                 modifier          = Modifier.padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Emoji du profil actif
                 Text(activeProfile.emoji, fontSize = 26.sp)
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
@@ -116,7 +123,6 @@ fun SettingsScreen(
                             fontWeight = FontWeight.Medium
                         )
                         Spacer(Modifier.width(8.dp))
-                        // Badge ACTIF coloré selon le profil
                         Surface(
                             shape = RoundedCornerShape(20.dp),
                             color = when (activeProfile) {
@@ -138,7 +144,6 @@ fun SettingsScreen(
                             )
                         }
                     }
-                    // Sous-titre contextuel
                     val subtitle = when (activeProfile) {
                         BlockingProfile.WORK     -> "Contacts, favoris et numéros pro autorisés"
                         BlockingProfile.HOME     -> "Contacts et favoris uniquement"
@@ -156,7 +161,6 @@ fun SettingsScreen(
             }
         }
 
-        // ── Sélecteur rapide (3 boutons inline) ──
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -173,7 +177,7 @@ fun SettingsScreen(
                         containerColor = if (isActive) c.neonCyan.copy(alpha = 0.12f) else c.surfaceVar,
                         contentColor   = if (isActive) c.neonCyan else c.textSecond
                     ),
-                    border   = androidx.compose.foundation.BorderStroke(
+                    border = androidx.compose.foundation.BorderStroke(
                         width = if (isActive) 1.5.dp else 0.5.dp,
                         color = if (isActive) c.neonCyan else c.glassStroke
                     )
@@ -186,6 +190,8 @@ fun SettingsScreen(
             }
         }
 
+        // ══════════════════════════════════════════════════════════════
+        // PROTECTION
         // ══════════════════════════════════════════════════════════════
         SectionHeader("🛡️ Protection")
 
@@ -209,6 +215,59 @@ fun SettingsScreen(
             subtitle = "prefixes_blocked_fr.json v4.1 (2026-04-05)",
             onClick  = {}
         )
+
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 4.dp),
+            shape  = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(containerColor = c.surfaceVar)
+        ) {
+            Row(
+                modifier          = Modifier.padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    Icons.Default.LocalHospital,
+                    contentDescription = null,
+                    tint     = if (hospitalEnabled) c.neonCyan else c.textSecond,
+                    modifier = Modifier.size(22.dp)
+                )
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        "Whitelist établissements de santé",
+                        fontSize   = 15.sp,
+                        color      = c.textPrimary,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        when {
+                            !hospitalEnabled  -> "Désactivée — les hôpitaux peuvent être bloqués"
+                            hospitalCount > 0 -> "$hospitalCount établissements · Source FINESS 2026"
+                            else              -> "Chargement..."
+                        },
+                        fontSize = 12.sp,
+                        color    = if (hospitalEnabled) c.textSecond else c.neonOrange
+                    )
+                }
+                Switch(
+                    checked         = hospitalEnabled,
+                    onCheckedChange = { vm.setHospitalWhitelistEnabled(it) },
+                    colors          = SwitchDefaults.colors(
+                        checkedThumbColor   = c.background,
+                        checkedTrackColor   = c.neonCyan,
+                        uncheckedThumbColor = c.textSecond,
+                        uncheckedTrackColor = c.glassStroke
+                    )
+                )
+            }
+        }
+
+        if (!hospitalEnabled) {
+            InfoCard("⚠️ Désactivée : les appels d'hôpitaux, SAMU et urgences peuvent être bloqués par les autres filtres.")
+        }
+
         SettingItem(
             icon     = Icons.Default.WarningAmber,
             title    = "Top numéros signalés",
@@ -223,6 +282,9 @@ fun SettingsScreen(
             onToggle = { vm.spamDetector.setCommunityBlockEnabled(it) }
         )
 
+        // ══════════════════════════════════════════════════════════════
+        // NE PAS DÉRANGER
+        // ══════════════════════════════════════════════════════════════
         SectionHeader("🌙 Mode Ne pas déranger")
 
         SettingSwitch(
@@ -239,6 +301,9 @@ fun SettingsScreen(
             InfoCard("⚠️ Seuls les numéros de votre liste blanche et les services d'urgence (15, 17, 18, 112) peuvent vous joindre.")
         }
 
+        // ══════════════════════════════════════════════════════════════
+        // HORAIRES
+        // ══════════════════════════════════════════════════════════════
         SectionHeader("⏰ Horaires de blocage")
 
         SettingSwitch(
@@ -256,6 +321,9 @@ fun SettingsScreen(
             InfoCard("📋 Les inconnus et numéros spam seront bloqués de $startStr à $endStr.")
         }
 
+        // ══════════════════════════════════════════════════════════════
+        // LISTE BLANCHE
+        // ══════════════════════════════════════════════════════════════
         SectionHeader("✅ Liste blanche")
 
         SettingItem(
@@ -265,6 +333,138 @@ fun SettingsScreen(
             onClick  = onNavigateToWhitelist
         )
 
+        // ══════════════════════════════════════════════════════════════
+        // AFFICHAGE DES APPELS
+        // ══════════════════════════════════════════════════════════════
+        SectionHeader("📞 Affichage des appels")
+
+        // Avertissement permission si mode non-fullscreen sélectionné
+        // et permission pas encore accordée
+        if (callPopupMode != CallPopupMode.FULLSCREEN && !canDrawOverlays.value) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                shape  = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(containerColor = c.neonOrange.copy(alpha = 0.1f)),
+                onClick = {
+                    ctx.startActivity(
+                        Intent(
+                            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                            Uri.parse("package:${ctx.packageName}")
+                        )
+                    )
+                }
+            ) {
+                Row(
+                    modifier          = Modifier.padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.Warning, null, tint = c.neonOrange, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(10.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            "Permission requise",
+                            fontSize   = 13.sp,
+                            color      = c.neonOrange,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            "Appuyez ici pour autoriser l'affichage par-dessus les autres applis",
+                            fontSize = 12.sp,
+                            color    = c.neonOrange.copy(alpha = 0.8f)
+                        )
+                    }
+                    Icon(Icons.Default.ChevronRight, null, tint = c.neonOrange)
+                }
+            }
+        }
+
+        // Sélecteur de mode : 3 boutons
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 4.dp),
+            shape  = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(containerColor = c.surfaceVar)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    "Mode d'affichage lors d'un appel",
+                    fontSize   = 15.sp,
+                    color      = c.textPrimary,
+                    fontWeight = FontWeight.Medium
+                )
+                Text(
+                    "Choisir comment l'écran d'appel apparaît",
+                    fontSize = 12.sp,
+                    color    = c.textSecond,
+                    modifier = Modifier.padding(bottom = 12.dp)
+                )
+                Row(
+                    modifier              = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    CallPopupMode.entries.forEach { mode ->
+                        val isActive = callPopupMode == mode
+                        OutlinedButton(
+                            onClick  = {
+                                if (mode != CallPopupMode.FULLSCREEN && !Settings.canDrawOverlays(ctx)) {
+                                    // Demander la permission d'abord
+                                    ctx.startActivity(
+                                        Intent(
+                                            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                            Uri.parse("package:${ctx.packageName}")
+                                        )
+                                    )
+                                } else {
+                                    vm.setCallPopupMode(mode)
+                                    canDrawOverlays.value = Settings.canDrawOverlays(ctx)
+                                }
+                            },
+                            modifier = Modifier.weight(1f),
+                            shape    = RoundedCornerShape(10.dp),
+                            colors   = ButtonDefaults.outlinedButtonColors(
+                                containerColor = if (isActive) c.neonCyan.copy(alpha = 0.12f) else c.surfaceVar,
+                                contentColor   = if (isActive) c.neonCyan else c.textSecond
+                            ),
+                            border = androidx.compose.foundation.BorderStroke(
+                                width = if (isActive) 1.5.dp else 0.5.dp,
+                                color = if (isActive) c.neonCyan else c.glassStroke
+                            )
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier            = Modifier.padding(vertical = 4.dp)
+                            ) {
+                                Text(mode.emoji, fontSize = 20.sp)
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    mode.label,
+                                    fontSize   = 10.sp,
+                                    fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal
+                                )
+                            }
+                        }
+                    }
+                }
+                // Description du mode actif
+                Text(
+                    text = when (callPopupMode) {
+                        CallPopupMode.FULLSCREEN -> "📱 L'appel prend tout l'écran (comportement par défaut)"
+                        CallPopupMode.COMPACT    -> "🪟 Carte en bas de l'écran, vous pouvez continuer à utiliser votre téléphone"
+                        CallPopupMode.MINI       -> "➖ Fine barre en haut de l'écran, discret et minimal"
+                    },
+                    fontSize = 12.sp,
+                    color    = c.neonCyan.copy(alpha = 0.8f),
+                    modifier = Modifier.padding(top = 10.dp)
+                )
+            }
+        }
+
+        // ══════════════════════════════════════════════════════════════
+        // SAUVEGARDE
+        // ══════════════════════════════════════════════════════════════
         SectionHeader("💾 Sauvegarde & Restauration")
 
         backupMessage?.let { msg -> InfoCard(msg) }
@@ -327,6 +527,9 @@ fun SettingsScreen(
             }
         }
 
+        // ══════════════════════════════════════════════════════════════
+        // APPARENCE
+        // ══════════════════════════════════════════════════════════════
         SectionHeader("🎨 Apparence")
 
         SettingItem(
@@ -335,10 +538,14 @@ fun SettingsScreen(
             subtitle = when (currentTheme) {
                 AppTheme.CYBER_DARK -> "Cyber Dark (actif)"
                 AppTheme.ZEN_LIGHT  -> "Zen Clair (actif)"
+                AppTheme.CYANOGEN   -> "Cyanogen (actif)"
             },
             onClick = onNavigateToTheme
         )
 
+        // ══════════════════════════════════════════════════════════════
+        // APP PAR DÉFAUT
+        // ══════════════════════════════════════════════════════════════
         SectionHeader("📱 Application par défaut")
 
         SettingItem(
@@ -369,6 +576,9 @@ fun SettingsScreen(
             }
         )
 
+        // ══════════════════════════════════════════════════════════════
+        // CONSEILS
+        // ══════════════════════════════════════════════════════════════
         SectionHeader("💡 Conseils sécurité")
 
         Card(
@@ -389,6 +599,112 @@ fun SettingsScreen(
             }
         }
 
+
+        // ══════════════════════════════════════════════════════════════
+        // DIAGNOSTIC
+        // ══════════════════════════════════════════════════════════════
+        SectionHeader("🐛 Diagnostic")
+
+        if (hasCrashReport.value) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                shape  = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(containerColor = c.neonOrange.copy(alpha = 0.08f))
+            ) {
+                Row(
+                    modifier          = Modifier.padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.BugReport, null, tint = c.neonOrange, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        "Un rapport de crash est disponible",
+                        fontSize   = 13.sp,
+                        color      = c.neonOrange,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier   = Modifier.weight(1f)
+                    )
+                }
+            }
+        }
+
+        // Partager le dernier rapport
+        Card(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+            shape    = RoundedCornerShape(12.dp),
+            colors   = CardDefaults.cardColors(containerColor = c.surfaceVar),
+            onClick  = {
+                val reports = CrashHandler.getCrashReports(ctx)
+                if (reports.isEmpty()) return@Card
+                val uri = FileProvider.getUriForFile(
+                    ctx,
+                    "${ctx.packageName}.fileprovider",
+                    reports.first()
+                )
+                val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                    putExtra(android.content.Intent.EXTRA_SUBJECT, "PhoneZen — Rapport de crash")
+                    addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                ctx.startActivity(android.content.Intent.createChooser(intent, "Partager le rapport"))
+            }
+        ) {
+            Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Default.Share,
+                    null,
+                    tint     = if (hasCrashReport.value) c.neonCyan else c.textSecond,
+                    modifier = Modifier.size(22.dp)
+                )
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        "Partager le dernier rapport",
+                        fontSize   = 15.sp,
+                        color      = c.textPrimary,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        if (hasCrashReport.value)
+                            "${CrashHandler.getCrashReports(ctx).size} rapport(s) disponible(s)"
+                        else
+                            "Aucun crash enregistré — tout va bien !",
+                        fontSize = 12.sp,
+                        color    = if (hasCrashReport.value) c.neonOrange else c.textSecond
+                    )
+                }
+                Icon(Icons.Default.ChevronRight, null, tint = c.textSecond)
+            }
+        }
+
+        // Supprimer tous les rapports
+        if (hasCrashReport.value) {
+            Card(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                shape    = RoundedCornerShape(12.dp),
+                colors   = CardDefaults.cardColors(containerColor = c.surfaceVar),
+                onClick  = {
+                    CrashHandler.clearAll(ctx)
+                    hasCrashReport.value = false
+                }
+            ) {
+                Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.DeleteSweep, null, tint = c.neonOrange, modifier = Modifier.size(22.dp))
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("Effacer tous les rapports", fontSize = 15.sp, color = c.textPrimary, fontWeight = FontWeight.Medium)
+                        Text("Libère l'espace occupé par les fichiers de diagnostic", fontSize = 12.sp, color = c.textSecond)
+                    }
+                }
+            }
+        }
+
+        // ══════════════════════════════════════════════════════════════
+        // À PROPOS
+        // ══════════════════════════════════════════════════════════════
         SectionHeader("ℹ️ À propos")
 
         SettingItem(
@@ -405,7 +721,7 @@ fun SettingsScreen(
         Spacer(Modifier.height(32.dp))
     }
 
-    // ── Dialogs ──
+    // ── Dialogs ───────────────────────────────────────────────────────
     if (showStartPicker) {
         TimePickerDialog(
             initialHour   = scheduleStartH,
@@ -461,7 +777,7 @@ fun SettingsScreen(
 }
 
 // ══════════════════════════════════════════════════════════════
-// COMPOSANTS PRIVÉS (inchangés)
+// COMPOSANTS PRIVÉS
 // ══════════════════════════════════════════════════════════════
 
 @OptIn(ExperimentalMaterial3Api::class)

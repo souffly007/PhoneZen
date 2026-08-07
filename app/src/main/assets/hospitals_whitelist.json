@@ -1,0 +1,1118 @@
+{
+  "version": "1.0",
+  "updated": "2026-05-23",
+  "description": "Whitelist des établissements de santé français — CHU/CHRU, AP-HP, AP-HM, hôpitaux militaires, centres anticancer, numéros d'urgence. Utilisée par PhoneZen pour autoriser ces appels en priorité absolue.",
+  "source": "Annuaire Service-Public, sites officiels CHU, FHF",
+  "entries": [
+
+    {
+      "name": "Numéros d'urgence nationaux",
+      "type": "emergency",
+      "region": "France",
+      "numbers": ["15", "18", "112", "17", "196", "3114", "15", "191", "197"]
+    },
+
+    {
+      "name": "Numéro national de prévention du suicide",
+      "type": "emergency",
+      "region": "France",
+      "numbers": ["3114"]
+    },
+
+    {
+      "name": "AP-HP — Assistance Publique Hôpitaux de Paris (standard général)",
+      "type": "hospital",
+      "region": "Île-de-France",
+      "numbers": ["0140275757"],
+      "prefixes": ["0142", "0143", "0144", "0145", "0146", "0147", "0148", "0149"]
+    },
+    {
+      "name": "AP-HP — Hôpital Necker Enfants Malades",
+      "type": "hospital",
+      "region": "Île-de-France",
+      "numbers": ["0144494444"]
+    },
+    {
+      "name": "AP-HP — Hôpital Lariboisière",
+      "type": "hospital",
+      "region": "Île-de-France",
+      "numbers": ["0149956767"]
+    },
+    {
+      "name": "AP-HP — Hôpital Saint-Louis",
+      "type": "hospital",
+      "region": "Île-de-France",
+      "numbers": ["0142499494"]
+    },
+    {
+      "name": "AP-HP — Hôpital Pitié-Salpêtrière",
+      "type": "hospital",
+      "region": "Île-de-France",
+      "numbers": ["0142161616"]
+    },
+    {
+      "name": "AP-HP — Hôpital Cochin",
+      "type": "hospital",
+      "region": "Île-de-France",
+      "numbers": ["0158411000"]
+    },
+    {
+      "name": "AP-HP — Hôpital Hôtel-Dieu",
+      "type": "hospital",
+      "region": "Île-de-France",
+      "numbers": ["0142348282"]
+    },
+    {
+      "name": "AP-HP — Hôpital Bichat Claude Bernard",
+      "type": "hospital",
+      "region": "Île-de-France",
+      "numbers": ["0140258080"]
+    },
+    {
+      "name": "AP-HP — Hôpital Beaujon",
+      "type": "hospital",
+      "region": "Île-de-France",
+      "numbers": ["0140875000"]
+    },
+    {
+      "name": "AP-HP — Hôpital Louis Mourier",
+      "type": "hospital",
+      "region": "Île-de-France",
+      "numbers": ["0147606767"]
+    },
+    {
+      "name": "AP-HP — Hôpital Raymond-Poincaré",
+      "type": "hospital",
+      "region": "Île-de-France",
+      "numbers": ["0147107900"]
+    },
+    {
+      "name": "AP-HP — Hôpital Ambroise Paré",
+      "type": "hospital",
+      "region": "Île-de-France",
+      "numbers": ["0149095000"]
+    },
+    {
+      "name": "AP-HP — Hôpital Antoine Béclère",
+      "type": "hospital",
+      "region": "Île-de-France",
+      "numbers": ["0145374444"]
+    },
+    {
+      "name": "AP-HP — Hôpital Paul Brousse",
+      "type": "hospital",
+      "region": "Île-de-France",
+      "numbers": ["0145593000"]
+    },
+    {
+      "name": "AP-HP — Hôpital Bicêtre",
+      "type": "hospital",
+      "region": "Île-de-France",
+      "numbers": ["0145213636"]
+    },
+    {
+      "name": "AP-HP — Hôpital Kremlin-Bicêtre",
+      "type": "hospital",
+      "region": "Île-de-France",
+      "numbers": ["0145213636"]
+    },
+    {
+      "name": "AP-HP — Hôpital Henri Mondor",
+      "type": "hospital",
+      "region": "Île-de-France",
+      "numbers": ["0149812121"]
+    },
+    {
+      "name": "AP-HP — Hôpital Albert Chenevier",
+      "type": "hospital",
+      "region": "Île-de-France",
+      "numbers": ["0149813131"]
+    },
+    {
+      "name": "AP-HP — Hôpital Tenon",
+      "type": "hospital",
+      "region": "Île-de-France",
+      "numbers": ["0156017000"]
+    },
+    {
+      "name": "AP-HP — Hôpital Saint-Antoine",
+      "type": "hospital",
+      "region": "Île-de-France",
+      "numbers": ["0149282828"]
+    },
+    {
+      "name": "AP-HP — Hôpital Trousseau",
+      "type": "hospital",
+      "region": "Île-de-France",
+      "numbers": ["0144736161"]
+    },
+    {
+      "name": "AP-HP — Hôpital Rothschild",
+      "type": "hospital",
+      "region": "Île-de-France",
+      "numbers": ["0140193000"]
+    },
+    {
+      "name": "AP-HP — Hôpital Avicenne",
+      "type": "hospital",
+      "region": "Île-de-France",
+      "numbers": ["0148955555"]
+    },
+    {
+      "name": "AP-HP — Hôpital Jean Verdier",
+      "type": "hospital",
+      "region": "Île-de-France",
+      "numbers": ["0148026666"]
+    },
+    {
+      "name": "AP-HP — Hôpital Robert Debré",
+      "type": "hospital",
+      "region": "Île-de-France",
+      "numbers": ["0140032222"]
+    },
+    {
+      "name": "AP-HP — Hôpital Lariboisière (standard)",
+      "type": "hospital",
+      "region": "Île-de-France",
+      "numbers": ["0149956767"]
+    },
+    {
+      "name": "AP-HP — Hôpital Sainte-Anne",
+      "type": "hospital",
+      "region": "Île-de-France",
+      "numbers": ["0145658000"]
+    },
+    {
+      "name": "AP-HP — Hôpital Broca",
+      "type": "hospital",
+      "region": "Île-de-France",
+      "numbers": ["0144083000"]
+    },
+
+    {
+      "name": "CHU de Bordeaux (standard unique)",
+      "type": "hospital",
+      "region": "Nouvelle-Aquitaine",
+      "numbers": ["0556795679"],
+      "prefixes": ["055679", "055656"]
+    },
+    {
+      "name": "CHU de Bordeaux (numéro patient)",
+      "type": "hospital",
+      "region": "Nouvelle-Aquitaine",
+      "numbers": ["0978332013"]
+    },
+
+    {
+      "name": "Hospices Civils de Lyon (standard général)",
+      "type": "hospital",
+      "region": "Auvergne-Rhône-Alpes",
+      "numbers": ["0472110000"],
+      "prefixes": ["04721", "04728", "04726", "04727"]
+    },
+    {
+      "name": "HCL — Hôpital Édouard Herriot",
+      "type": "hospital",
+      "region": "Auvergne-Rhône-Alpes",
+      "numbers": ["0472116161"]
+    },
+    {
+      "name": "HCL — Hôpital de la Croix-Rousse",
+      "type": "hospital",
+      "region": "Auvergne-Rhône-Alpes",
+      "numbers": ["0426109300"]
+    },
+    {
+      "name": "HCL — Hôpital Lyon Sud",
+      "type": "hospital",
+      "region": "Auvergne-Rhône-Alpes",
+      "numbers": ["0478861111"]
+    },
+    {
+      "name": "HCL — Hôpital Femme Mère Enfant",
+      "type": "hospital",
+      "region": "Auvergne-Rhône-Alpes",
+      "numbers": ["0472129000"]
+    },
+    {
+      "name": "HCL — Hôpital Neurologique Pierre Wertheimer",
+      "type": "hospital",
+      "region": "Auvergne-Rhône-Alpes",
+      "numbers": ["0472357000"]
+    },
+    {
+      "name": "HCL — Hôpital Louis Pradel",
+      "type": "hospital",
+      "region": "Auvergne-Rhône-Alpes",
+      "numbers": ["0472357000"]
+    },
+
+    {
+      "name": "AP-HM — Assistance Publique Hôpitaux de Marseille (standard)",
+      "type": "hospital",
+      "region": "Provence-Alpes-Côte d'Azur",
+      "numbers": ["0491383000"],
+      "prefixes": ["04914", "04913", "04912"]
+    },
+    {
+      "name": "AP-HM — Hôpital La Timone",
+      "type": "hospital",
+      "region": "Provence-Alpes-Côte d'Azur",
+      "numbers": ["0491386000"]
+    },
+    {
+      "name": "AP-HM — Hôpital Nord",
+      "type": "hospital",
+      "region": "Provence-Alpes-Côte d'Azur",
+      "numbers": ["0491969000"]
+    },
+    {
+      "name": "AP-HM — Hôpital de la Conception",
+      "type": "hospital",
+      "region": "Provence-Alpes-Côte d'Azur",
+      "numbers": ["0491383000"]
+    },
+    {
+      "name": "AP-HM — Hôpital Sainte-Marguerite",
+      "type": "hospital",
+      "region": "Provence-Alpes-Côte d'Azur",
+      "numbers": ["0491744000"]
+    },
+
+    {
+      "name": "CHRU de Lille (standard général)",
+      "type": "hospital",
+      "region": "Hauts-de-France",
+      "numbers": ["0320444444"],
+      "prefixes": ["032044", "032062"]
+    },
+    {
+      "name": "CHRU Lille — Hôpital Roger Salengro",
+      "type": "hospital",
+      "region": "Hauts-de-France",
+      "numbers": ["0320444444"]
+    },
+    {
+      "name": "CHRU Lille — Hôpital Claude Huriez",
+      "type": "hospital",
+      "region": "Hauts-de-France",
+      "numbers": ["0320444444"]
+    },
+
+    {
+      "name": "CHU de Toulouse (standard général)",
+      "type": "hospital",
+      "region": "Occitanie",
+      "numbers": ["0561772233"],
+      "prefixes": ["056177", "056149", "056132"]
+    },
+    {
+      "name": "CHU Toulouse — Hôpital Purpan",
+      "type": "hospital",
+      "region": "Occitanie",
+      "numbers": ["0561772233"]
+    },
+    {
+      "name": "CHU Toulouse — Hôpital Rangueil",
+      "type": "hospital",
+      "region": "Occitanie",
+      "numbers": ["0561322121"]
+    },
+    {
+      "name": "CHU Toulouse — Hôpital Paule de Viguier",
+      "type": "hospital",
+      "region": "Occitanie",
+      "numbers": ["0567771111"]
+    },
+
+    {
+      "name": "CHRU de Nancy (standard général)",
+      "type": "hospital",
+      "region": "Grand-Est",
+      "numbers": ["0383852222"],
+      "prefixes": ["038385", "038315"]
+    },
+    {
+      "name": "CHRU Nancy — Hôpital Brabois",
+      "type": "hospital",
+      "region": "Grand-Est",
+      "numbers": ["0383153131"]
+    },
+    {
+      "name": "CHRU Nancy — Hôpital Central",
+      "type": "hospital",
+      "region": "Grand-Est",
+      "numbers": ["0383853131"]
+    },
+    {
+      "name": "CHRU Nancy — Maternité Régionale",
+      "type": "hospital",
+      "region": "Grand-Est",
+      "numbers": ["0383344343"]
+    },
+
+    {
+      "name": "CHU de Strasbourg — Hôpitaux Universitaires de Strasbourg",
+      "type": "hospital",
+      "region": "Grand-Est",
+      "numbers": ["0388116768"],
+      "prefixes": ["038811", "038816"]
+    },
+    {
+      "name": "HUS Strasbourg — Hôpital de Hautepierre",
+      "type": "hospital",
+      "region": "Grand-Est",
+      "numbers": ["0388127272"]
+    },
+    {
+      "name": "HUS Strasbourg — Hôpital Civil",
+      "type": "hospital",
+      "region": "Grand-Est",
+      "numbers": ["0388116768"]
+    },
+    {
+      "name": "HUS Strasbourg — Hôpital de la Robertsau",
+      "type": "hospital",
+      "region": "Grand-Est",
+      "numbers": ["0388116768"]
+    },
+
+    {
+      "name": "CHU de Rennes (standard général)",
+      "type": "hospital",
+      "region": "Bretagne",
+      "numbers": ["0299284282"],
+      "prefixes": ["029928", "029926"]
+    },
+    {
+      "name": "CHU Rennes — Hôpital Pontchaillou",
+      "type": "hospital",
+      "region": "Bretagne",
+      "numbers": ["0299284282"]
+    },
+
+    {
+      "name": "CHRU de Brest (standard général)",
+      "type": "hospital",
+      "region": "Bretagne",
+      "numbers": ["0298223333"],
+      "prefixes": ["029822", "029893"]
+    },
+    {
+      "name": "CHRU Brest — Hôpital Morvan",
+      "type": "hospital",
+      "region": "Bretagne",
+      "numbers": ["0298223333"]
+    },
+    {
+      "name": "CHRU Brest — Hôpital Cavale Blanche",
+      "type": "hospital",
+      "region": "Bretagne",
+      "numbers": ["0298223333"]
+    },
+
+    {
+      "name": "CHU de Nantes (standard général)",
+      "type": "hospital",
+      "region": "Pays-de-la-Loire",
+      "numbers": ["0253482000"],
+      "prefixes": ["025348", "024008"]
+    },
+    {
+      "name": "CHU Nantes — Hôtel-Dieu",
+      "type": "hospital",
+      "region": "Pays-de-la-Loire",
+      "numbers": ["0253482000"]
+    },
+    {
+      "name": "CHU Nantes — Hôpital Laennec",
+      "type": "hospital",
+      "region": "Pays-de-la-Loire",
+      "numbers": ["0240165151"]
+    },
+    {
+      "name": "CHU Nantes — Hôpital Femme-Enfant-Adolescent",
+      "type": "hospital",
+      "region": "Pays-de-la-Loire",
+      "numbers": ["0240083333"]
+    },
+
+    {
+      "name": "CHU de Grenoble Alpes (standard général)",
+      "type": "hospital",
+      "region": "Auvergne-Rhône-Alpes",
+      "numbers": ["0476765757"],
+      "prefixes": ["047676", "047677"]
+    },
+    {
+      "name": "CHU Grenoble — Hôpital Michallon",
+      "type": "hospital",
+      "region": "Auvergne-Rhône-Alpes",
+      "numbers": ["0476765757"]
+    },
+
+    {
+      "name": "CHU de Montpellier (standard général)",
+      "type": "hospital",
+      "region": "Occitanie",
+      "numbers": ["0467338650"],
+      "prefixes": ["046733", "046760"]
+    },
+    {
+      "name": "CHU Montpellier — Hôpital Saint-Éloi",
+      "type": "hospital",
+      "region": "Occitanie",
+      "numbers": ["0467338650"]
+    },
+    {
+      "name": "CHU Montpellier — Hôpital Lapeyronie",
+      "type": "hospital",
+      "region": "Occitanie",
+      "numbers": ["0467338650"]
+    },
+    {
+      "name": "CHU Montpellier — Hôpital Gui de Chauliac",
+      "type": "hospital",
+      "region": "Occitanie",
+      "numbers": ["0467338650"]
+    },
+    {
+      "name": "CHU Montpellier — Hôpital Arnaud de Villeneuve",
+      "type": "hospital",
+      "region": "Occitanie",
+      "numbers": ["0467338650"]
+    },
+
+    {
+      "name": "CHU de Caen (standard général)",
+      "type": "hospital",
+      "region": "Normandie",
+      "numbers": ["0231272700"],
+      "prefixes": ["023127", "023106"]
+    },
+
+    {
+      "name": "CHU de Rouen (standard général)",
+      "type": "hospital",
+      "region": "Normandie",
+      "numbers": ["0232888989"],
+      "prefixes": ["023288", "023223"]
+    },
+    {
+      "name": "CHU Rouen — Hôpital Charles Nicolle",
+      "type": "hospital",
+      "region": "Normandie",
+      "numbers": ["0232888989"]
+    },
+
+    {
+      "name": "CHU d'Amiens-Picardie (standard général)",
+      "type": "hospital",
+      "region": "Hauts-de-France",
+      "numbers": ["0322455959"],
+      "prefixes": ["032245", "032266"]
+    },
+
+    {
+      "name": "CHU de Reims (standard général)",
+      "type": "hospital",
+      "region": "Grand-Est",
+      "numbers": ["0326787820"],
+      "prefixes": ["032678"]
+    },
+
+    {
+      "name": "CHRU de Besançon (standard général)",
+      "type": "hospital",
+      "region": "Bourgogne-Franche-Comté",
+      "numbers": ["0381668181"],
+      "prefixes": ["038166", "038152"]
+    },
+    {
+      "name": "CHRU Besançon — Hôpital Jean Minjoz",
+      "type": "hospital",
+      "region": "Bourgogne-Franche-Comté",
+      "numbers": ["0381668181"]
+    },
+
+    {
+      "name": "CHU de Dijon (standard général)",
+      "type": "hospital",
+      "region": "Bourgogne-Franche-Comté",
+      "numbers": ["0380293030"],
+      "prefixes": ["038029", "038017"]
+    },
+
+    {
+      "name": "CHU de Clermont-Ferrand (standard général)",
+      "type": "hospital",
+      "region": "Auvergne-Rhône-Alpes",
+      "numbers": ["0473751111"],
+      "prefixes": ["047375", "047344"]
+    },
+    {
+      "name": "CHU Clermont-Ferrand — Hôpital Gabriel-Montpied",
+      "type": "hospital",
+      "region": "Auvergne-Rhône-Alpes",
+      "numbers": ["0473751111"]
+    },
+    {
+      "name": "CHU Clermont-Ferrand — Hôpital Estaing",
+      "type": "hospital",
+      "region": "Auvergne-Rhône-Alpes",
+      "numbers": ["0473754950"]
+    },
+    {
+      "name": "CHU Clermont-Ferrand — Hôpital Louise Michel",
+      "type": "hospital",
+      "region": "Auvergne-Rhône-Alpes",
+      "numbers": ["0473751111"]
+    },
+
+    {
+      "name": "CHU de Limoges (standard général)",
+      "type": "hospital",
+      "region": "Nouvelle-Aquitaine",
+      "numbers": ["0555056565"],
+      "prefixes": ["055505", "055456"]
+    },
+    {
+      "name": "CHU Limoges — Hôpital Dupuytren",
+      "type": "hospital",
+      "region": "Nouvelle-Aquitaine",
+      "numbers": ["0555056565"]
+    },
+
+    {
+      "name": "CHU de Poitiers (standard général)",
+      "type": "hospital",
+      "region": "Nouvelle-Aquitaine",
+      "numbers": ["0549444444"],
+      "prefixes": ["054944", "054903"]
+    },
+
+    {
+      "name": "CHU de Nice (standard général)",
+      "type": "hospital",
+      "region": "Provence-Alpes-Côte d'Azur",
+      "numbers": ["0492036161"],
+      "prefixes": ["049203", "049233"]
+    },
+    {
+      "name": "CHU Nice — Hôpital Pasteur",
+      "type": "hospital",
+      "region": "Provence-Alpes-Côte d'Azur",
+      "numbers": ["0492036161"]
+    },
+    {
+      "name": "CHU Nice — Hôpital Archet",
+      "type": "hospital",
+      "region": "Provence-Alpes-Côte d'Azur",
+      "numbers": ["0492036161"]
+    },
+    {
+      "name": "CHU Nice — Hôpital Cimiez",
+      "type": "hospital",
+      "region": "Provence-Alpes-Côte d'Azur",
+      "numbers": ["0492036161"]
+    },
+
+    {
+      "name": "CHU de Tours (standard général)",
+      "type": "hospital",
+      "region": "Centre-Val-de-Loire",
+      "numbers": ["0247474747"],
+      "prefixes": ["024747"]
+    },
+    {
+      "name": "CHU Tours — Hôpital Bretonneau",
+      "type": "hospital",
+      "region": "Centre-Val-de-Loire",
+      "numbers": ["0247474747"]
+    },
+    {
+      "name": "CHU Tours — Hôpital Trousseau",
+      "type": "hospital",
+      "region": "Centre-Val-de-Loire",
+      "numbers": ["0247474747"]
+    },
+    {
+      "name": "CHU Tours — Hôpital Clocheville",
+      "type": "hospital",
+      "region": "Centre-Val-de-Loire",
+      "numbers": ["0247474747"]
+    },
+
+    {
+      "name": "CHU d'Angers (standard général)",
+      "type": "hospital",
+      "region": "Pays-de-la-Loire",
+      "numbers": ["0241354545"],
+      "prefixes": ["024135"]
+    },
+
+    {
+      "name": "CHU de Saint-Étienne (standard général)",
+      "type": "hospital",
+      "region": "Auvergne-Rhône-Alpes",
+      "numbers": ["0477127777"],
+      "prefixes": ["047712", "047742"]
+    },
+    {
+      "name": "CHU Saint-Étienne — Hôpital Nord",
+      "type": "hospital",
+      "region": "Auvergne-Rhône-Alpes",
+      "numbers": ["0477127777"]
+    },
+    {
+      "name": "CHU Saint-Étienne — Hôpital Bellevue",
+      "type": "hospital",
+      "region": "Auvergne-Rhône-Alpes",
+      "numbers": ["0477127777"]
+    },
+
+    {
+      "name": "CHU de Nîmes (standard général)",
+      "type": "hospital",
+      "region": "Occitanie",
+      "numbers": ["0466683131"],
+      "prefixes": ["046668", "046670"]
+    },
+    {
+      "name": "CHU Nîmes — Hôpital Carémeau",
+      "type": "hospital",
+      "region": "Occitanie",
+      "numbers": ["0466683131"]
+    },
+
+    {
+      "name": "CHR Orléans (standard général)",
+      "type": "hospital",
+      "region": "Centre-Val-de-Loire",
+      "numbers": ["0238229595"],
+      "prefixes": ["023822", "023880"]
+    },
+    {
+      "name": "CHR Orléans — Hôpital de la Source",
+      "type": "hospital",
+      "region": "Centre-Val-de-Loire",
+      "numbers": ["0238229595"]
+    },
+
+    {
+      "name": "CHR Metz-Thionville (standard général)",
+      "type": "hospital",
+      "region": "Grand-Est",
+      "numbers": ["0387553535"],
+      "prefixes": ["038755", "038251"]
+    },
+    {
+      "name": "CHR Metz — Hôpital Mercy",
+      "type": "hospital",
+      "region": "Grand-Est",
+      "numbers": ["0387553535"]
+    },
+    {
+      "name": "CHR Thionville — Hôpital Bel Air",
+      "type": "hospital",
+      "region": "Grand-Est",
+      "numbers": ["0382514545"]
+    },
+
+    {
+      "name": "CHU de Martinique (standard général)",
+      "type": "hospital",
+      "region": "Martinique",
+      "numbers": ["0596552000"],
+      "prefixes": ["059655"]
+    },
+
+    {
+      "name": "CHU de Guadeloupe (standard général)",
+      "type": "hospital",
+      "region": "Guadeloupe",
+      "numbers": ["0590891010"],
+      "prefixes": ["059089"]
+    },
+
+    {
+      "name": "CHU de La Réunion (standard général)",
+      "type": "hospital",
+      "region": "La Réunion",
+      "numbers": ["0262905050"],
+      "prefixes": ["026290", "026235"]
+    },
+    {
+      "name": "CHU La Réunion — Hôpital Félix Guyon",
+      "type": "hospital",
+      "region": "La Réunion",
+      "numbers": ["0262905050"]
+    },
+    {
+      "name": "CHU La Réunion — Hôpital Sud",
+      "type": "hospital",
+      "region": "La Réunion",
+      "numbers": ["0262359090"]
+    },
+
+    {
+      "name": "CHAR Cayenne — Centre Hospitalier Andrée Rosemon",
+      "type": "hospital",
+      "region": "Guyane",
+      "numbers": ["0594395050"],
+      "prefixes": ["059439"]
+    },
+
+    {
+      "name": "Institut Curie — Paris",
+      "type": "cancer_center",
+      "region": "Île-de-France",
+      "numbers": ["0144324000"]
+    },
+    {
+      "name": "Institut Gustave Roussy — Villejuif",
+      "type": "cancer_center",
+      "region": "Île-de-France",
+      "numbers": ["0142114242"]
+    },
+    {
+      "name": "Institut Bergonié — Bordeaux",
+      "type": "cancer_center",
+      "region": "Nouvelle-Aquitaine",
+      "numbers": ["0556337833"]
+    },
+    {
+      "name": "Institut Claudius Regaud / IUCT-Oncopole — Toulouse",
+      "type": "cancer_center",
+      "region": "Occitanie",
+      "numbers": ["0531156000"]
+    },
+    {
+      "name": "Centre Léon Bérard — Lyon",
+      "type": "cancer_center",
+      "region": "Auvergne-Rhône-Alpes",
+      "numbers": ["0478782626"]
+    },
+    {
+      "name": "ICM — Institut du Cancer de Montpellier",
+      "type": "cancer_center",
+      "region": "Occitanie",
+      "numbers": ["0467613100"]
+    },
+    {
+      "name": "Institut Paoli-Calmettes — Marseille",
+      "type": "cancer_center",
+      "region": "Provence-Alpes-Côte d'Azur",
+      "numbers": ["0491223737"]
+    },
+    {
+      "name": "Centre François Baclesse — Caen",
+      "type": "cancer_center",
+      "region": "Normandie",
+      "numbers": ["0231455050"]
+    },
+    {
+      "name": "Centre Henri Becquerel — Rouen",
+      "type": "cancer_center",
+      "region": "Normandie",
+      "numbers": ["0232082222"]
+    },
+    {
+      "name": "Centre Oscar Lambret — Lille",
+      "type": "cancer_center",
+      "region": "Hauts-de-France",
+      "numbers": ["0320295900"]
+    },
+    {
+      "name": "Centre Jean Perrin — Clermont-Ferrand",
+      "type": "cancer_center",
+      "region": "Auvergne-Rhône-Alpes",
+      "numbers": ["0473278000"]
+    },
+    {
+      "name": "Centre Georges-François Leclerc — Dijon",
+      "type": "cancer_center",
+      "region": "Bourgogne-Franche-Comté",
+      "numbers": ["0380737500"]
+    },
+    {
+      "name": "Institut de Cancérologie de Lorraine — Nancy",
+      "type": "cancer_center",
+      "region": "Grand-Est",
+      "numbers": ["0383598484"]
+    },
+    {
+      "name": "Institut de Cancérologie de Strasbourg",
+      "type": "cancer_center",
+      "region": "Grand-Est",
+      "numbers": ["0388116768"]
+    },
+    {
+      "name": "Centre Paul Strauss — Strasbourg",
+      "type": "cancer_center",
+      "region": "Grand-Est",
+      "numbers": ["0388252424"]
+    },
+    {
+      "name": "Institut de Cancérologie de l'Ouest — Nantes/Angers",
+      "type": "cancer_center",
+      "region": "Pays-de-la-Loire",
+      "numbers": ["0240679999", "0241353535"]
+    },
+    {
+      "name": "Centre Eugène Marquis — Rennes",
+      "type": "cancer_center",
+      "region": "Bretagne",
+      "numbers": ["0299253131"]
+    },
+    {
+      "name": "Institut de Cancérologie Lucien Neuwirth — Saint-Étienne",
+      "type": "cancer_center",
+      "region": "Auvergne-Rhône-Alpes",
+      "numbers": ["0477917070"]
+    },
+
+    {
+      "name": "Hôpital d'Instruction des Armées Bégin — Saint-Mandé",
+      "type": "military_hospital",
+      "region": "Île-de-France",
+      "numbers": ["0143987272"]
+    },
+    {
+      "name": "Hôpital d'Instruction des Armées Percy — Clamart",
+      "type": "military_hospital",
+      "region": "Île-de-France",
+      "numbers": ["0141467272"]
+    },
+    {
+      "name": "Hôpital d'Instruction des Armées Sainte-Anne — Toulon",
+      "type": "military_hospital",
+      "region": "Provence-Alpes-Côte d'Azur",
+      "numbers": ["0498143939"]
+    },
+    {
+      "name": "Hôpital d'Instruction des Armées Robert Picqué — Villenave-d'Ornon",
+      "type": "military_hospital",
+      "region": "Nouvelle-Aquitaine",
+      "numbers": ["0556847000"]
+    },
+    {
+      "name": "Hôpital d'Instruction des Armées Desgenettes — Lyon",
+      "type": "military_hospital",
+      "region": "Auvergne-Rhône-Alpes",
+      "numbers": ["0472366060"]
+    },
+    {
+      "name": "Hôpital d'Instruction des Armées Legouest — Metz",
+      "type": "military_hospital",
+      "region": "Grand-Est",
+      "numbers": ["0387563737"]
+    },
+    {
+      "name": "Centre Médical des Armées — Marseille Laveran",
+      "type": "military_hospital",
+      "region": "Provence-Alpes-Côte d'Azur",
+      "numbers": ["0491617070"]
+    },
+
+    {
+      "name": "SAMU 75 — Paris",
+      "type": "samu",
+      "region": "Île-de-France",
+      "numbers": ["0140253535"]
+    },
+    {
+      "name": "SAMU 13 — Marseille",
+      "type": "samu",
+      "region": "Provence-Alpes-Côte d'Azur",
+      "numbers": ["0491394500"]
+    },
+    {
+      "name": "SAMU 69 — Lyon",
+      "type": "samu",
+      "region": "Auvergne-Rhône-Alpes",
+      "numbers": ["0472119000"]
+    },
+    {
+      "name": "SAMU 33 — Bordeaux",
+      "type": "samu",
+      "region": "Nouvelle-Aquitaine",
+      "numbers": ["0556796060"]
+    },
+    {
+      "name": "SAMU 59 — Lille",
+      "type": "samu",
+      "region": "Hauts-de-France",
+      "numbers": ["0320444545"]
+    },
+    {
+      "name": "SAMU 31 — Toulouse",
+      "type": "samu",
+      "region": "Occitanie",
+      "numbers": ["0561496060"]
+    },
+    {
+      "name": "SAMU 67 — Strasbourg",
+      "type": "samu",
+      "region": "Grand-Est",
+      "numbers": ["0388116060"]
+    },
+    {
+      "name": "SAMU 35 — Rennes",
+      "type": "samu",
+      "region": "Bretagne",
+      "numbers": ["0299286060"]
+    },
+    {
+      "name": "SAMU 44 — Nantes",
+      "type": "samu",
+      "region": "Pays-de-la-Loire",
+      "numbers": ["0240083015"]
+    },
+    {
+      "name": "SAMU 06 — Nice",
+      "type": "samu",
+      "region": "Provence-Alpes-Côte d'Azur",
+      "numbers": ["0492036060"]
+    },
+    {
+      "name": "SAMU 38 — Grenoble",
+      "type": "samu",
+      "region": "Auvergne-Rhône-Alpes",
+      "numbers": ["0476766060"]
+    },
+    {
+      "name": "SAMU 54 — Nancy",
+      "type": "samu",
+      "region": "Grand-Est",
+      "numbers": ["0383852525"]
+    },
+    {
+      "name": "SAMU 76 — Rouen",
+      "type": "samu",
+      "region": "Normandie",
+      "numbers": ["0232888080"]
+    },
+    {
+      "name": "SAMU 34 — Montpellier",
+      "type": "samu",
+      "region": "Occitanie",
+      "numbers": ["0467338686"]
+    },
+    {
+      "name": "SAMU 37 — Tours",
+      "type": "samu",
+      "region": "Centre-Val-de-Loire",
+      "numbers": ["0247474848"]
+    },
+    {
+      "name": "SAMU 29 — Brest",
+      "type": "samu",
+      "region": "Bretagne",
+      "numbers": ["0298225858"]
+    },
+    {
+      "name": "SAMU 57 — Metz",
+      "type": "samu",
+      "region": "Grand-Est",
+      "numbers": ["0387553636"]
+    },
+    {
+      "name": "SAMU 51 — Reims",
+      "type": "samu",
+      "region": "Grand-Est",
+      "numbers": ["0326787878"]
+    },
+    {
+      "name": "SAMU 25 — Besançon",
+      "type": "samu",
+      "region": "Bourgogne-Franche-Comté",
+      "numbers": ["0381668282"]
+    },
+    {
+      "name": "SAMU 21 — Dijon",
+      "type": "samu",
+      "region": "Bourgogne-Franche-Comté",
+      "numbers": ["0380293131"]
+    },
+    {
+      "name": "SAMU 63 — Clermont-Ferrand",
+      "type": "samu",
+      "region": "Auvergne-Rhône-Alpes",
+      "numbers": ["0473751515"]
+    },
+    {
+      "name": "SAMU 87 — Limoges",
+      "type": "samu",
+      "region": "Nouvelle-Aquitaine",
+      "numbers": ["0555056161"]
+    },
+    {
+      "name": "SAMU 86 — Poitiers",
+      "type": "samu",
+      "region": "Nouvelle-Aquitaine",
+      "numbers": ["0549444545"]
+    },
+    {
+      "name": "SAMU 49 — Angers",
+      "type": "samu",
+      "region": "Pays-de-la-Loire",
+      "numbers": ["0241354646"]
+    },
+    {
+      "name": "SAMU 14 — Caen",
+      "type": "samu",
+      "region": "Normandie",
+      "numbers": ["0231272800"]
+    },
+    {
+      "name": "SAMU 80 — Amiens",
+      "type": "samu",
+      "region": "Hauts-de-France",
+      "numbers": ["0322455050"]
+    },
+    {
+      "name": "SAMU 42 — Saint-Étienne",
+      "type": "samu",
+      "region": "Auvergne-Rhône-Alpes",
+      "numbers": ["0477127878"]
+    },
+    {
+      "name": "SAMU 30 — Nîmes",
+      "type": "samu",
+      "region": "Occitanie",
+      "numbers": ["0466683232"]
+    },
+    {
+      "name": "SAMU 45 — Orléans",
+      "type": "samu",
+      "region": "Centre-Val-de-Loire",
+      "numbers": ["0238220505"]
+    },
+    {
+      "name": "SAMU 972 — Martinique",
+      "type": "samu",
+      "region": "Martinique",
+      "numbers": ["0596552100"]
+    },
+    {
+      "name": "SAMU 971 — Guadeloupe",
+      "type": "samu",
+      "region": "Guadeloupe",
+      "numbers": ["0590891515"]
+    },
+    {
+      "name": "SAMU 974 — La Réunion",
+      "type": "samu",
+      "region": "La Réunion",
+      "numbers": ["0262905151"]
+    },
+    {
+      "name": "SAMU 973 — Guyane",
+      "type": "samu",
+      "region": "Guyane",
+      "numbers": ["0594395151"]
+    }
+
+  ]
+}
