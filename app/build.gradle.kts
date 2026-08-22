@@ -29,7 +29,7 @@ android {
         }
 
         buildConfigField("String", "SUPABASE_URL", "\"${localProperties.getProperty("supabase_url", "")}\"")
-        buildConfigField("String", "SUPABASE_PUBLISHABLE_KEY", "\"${localProperties.getProperty("supabase_publishable_key", "")}\"")
+        buildConfigField("String", "SUPABASE_PUBLISHABLE_KEY", "\"${localProperties.getProperty("SUPABASE_PUBLISHABLE_KEY", "")}\"")
     }
 
     packaging {
