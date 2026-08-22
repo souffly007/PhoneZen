@@ -4,3 +4,4 @@
 /app/build/intermediates/javac/debug/classes/local.properties
 local.properties
 app/release/
+.idea/
