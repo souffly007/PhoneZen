@@ -4,8 +4,6 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android") version "2.1.10"
     id("com.google.devtools.ksp") version "2.1.10-1.0.29"
-    id("com.google.gms.google-services")
-    id("com.google.firebase.crashlytics")
     id("org.jetbrains.kotlin.plugin.compose") version "2.1.10"
     id("org.jetbrains.kotlin.plugin.serialization") version "2.1.10"
 }
@@ -31,7 +29,7 @@ android {
         }
 
         buildConfigField("String", "SUPABASE_URL", "\"${localProperties.getProperty("supabase_url", "")}\"")
-        buildConfigField("String", "SUPABASE_ANON_KEY", "\"${localProperties.getProperty("supabase_anon_key", "")}\"")
+        buildConfigField("String", "SUPABASE_PUBLISHABLE_KEY", "\"${localProperties.getProperty("supabase_publishable_key", "")}\"")
     }
 
     packaging {
@@ -69,12 +67,7 @@ android {
 }
 
 dependencies {
-    // ── Firebase ──
-    implementation(platform("com.google.firebase:firebase-bom:33.0.0"))
-    // implementation("com.google.firebase:firebase-firestore-ktx")  // RETIRÉ
-    implementation("com.google.firebase:firebase-crashlytics")
-
-    // ── Ktor (remplace Firestore) ──
+    // ── Ktor (client HTTP pour Supabase) ──
     implementation("io.ktor:ktor-client-android:2.3.7")
     implementation("io.ktor:ktor-client-content-negotiation:2.3.7")
     implementation("io.ktor:ktor-serialization-kotlinx-json:2.3.7")

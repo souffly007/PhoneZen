@@ -15,8 +15,13 @@ import java.io.FileOutputStream
  * ------------------
  * Lookup offline des commissariats de Police Nationale accueillant du public.
  *
- * Source : Ministère de l'Intérieur (data.gouv.fr), mis à jour juin 2026.
- * 14 commissariats référencés avec numéro + nom + commune.
+ * Complément manuel à la base DILA (qui couvre déjà l'essentiel des
+ * commissariats/gendarmeries via ses catégories "commissariat_police",
+ * "police_municipale", "gendarmerie"). Cette base ne référence que les
+ * postes mobiles/temporaires/événementiels qui n'apparaissent pas dans
+ * l'annuaire officiel service-public.gouv.fr.
+ *
+ * 14 entrées référencées avec numéro + nom + commune + département.
  *
  * La base [police_whitelist.db] doit être placée dans :
  *   app/src/main/assets/police_whitelist.db
@@ -26,7 +31,7 @@ class PoliceLookupHelper private constructor(context: Context) {
     companion object {
         private const val TAG        = "PoliceLookup"
         private const val DB_ASSET   = "police_whitelist.db"
-        private const val DB_VERSION = 1
+        private const val DB_VERSION = 2  // Incrémenté 13/08/2026 : base régénérée (contenu identique, 14 entrées)
 
         @Volatile
         private var INSTANCE: PoliceLookupHelper? = null

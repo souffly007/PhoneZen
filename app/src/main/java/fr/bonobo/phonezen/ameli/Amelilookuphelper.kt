@@ -16,7 +16,7 @@ import java.io.FileOutputStream
  * Lookup offline O(1) des professionnels de santé et centres de santé
  * via la base Ameli (annuairesante.ameli.fr).
  *
- * 271 302 numéros : médecins, infirmiers, kinés, dentistes, pharmacies,
+ * ~271 000 numéros : médecins, infirmiers, kinés, dentistes, pharmacies,
  * laboratoires, centres de santé...
  *
  * La base [ameli_whitelist.db] doit être placée dans :
@@ -27,7 +27,7 @@ class AmeliLookupHelper private constructor(context: Context) {
     companion object {
         private const val TAG        = "AmeliLookup"
         private const val DB_ASSET   = "ameli_whitelist.db"
-        private const val DB_VERSION = 1
+        private const val DB_VERSION = 2  // Incrémenté 13/08/2026 : base régénérée (271 221 numéros)
 
         // Table des spécialités embarquée en mémoire (68 entrées, ~2 Ko)
         private val SPECIALITES = mapOf(

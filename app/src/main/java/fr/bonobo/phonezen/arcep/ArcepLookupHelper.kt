@@ -27,7 +27,7 @@ class ArcepLookupHelper private constructor(context: Context) {
     companion object {
         private const val TAG         = "ArcepLookup"
         private const val DB_ASSET    = "arcep_lookup.db"
-        private const val DB_VERSION  = 1           // Incrémenter si tu régénères la base
+        private const val DB_VERSION  = 2  // Incrémenté 13/08/2026 : base régénérée (20 479 tranches)
 
         @Volatile
         private var INSTANCE: ArcepLookupHelper? = null

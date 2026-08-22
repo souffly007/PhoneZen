@@ -16,7 +16,7 @@ import java.io.FileOutputStream
  * Lookup offline O(1) des numéros de téléphone du service public français
  * via la base DILA (annuaire service-public.gouv.fr).
  *
- * 63 000+ numéros : mairies, gendarmeries, commissariats, CAF, CPAM,
+ * 66 000+ numéros : mairies, gendarmeries, commissariats, CAF, CPAM,
  * France Travail, impôts, tribunaux, France Services...
  *
  * La base [dila_whitelist.db] doit être placée dans :
@@ -25,14 +25,14 @@ import java.io.FileOutputStream
  * Usage :
  *   val helper = DilaLookupHelper.getInstance(context)
  *   val info   = helper.lookup("0164383052")
- *   // → DilaInfo(nom="Mairie - Fontaine-le-Port", categorie="Mairie", commune="77188")
+ *   // → DilaInfo(nom="Mairie - Fontaine-le-Port", categorie="mairie", commune="77188")
  */
 class DilaLookupHelper private constructor(context: Context) {
 
     companion object {
         private const val TAG        = "DilaLookup"
         private const val DB_ASSET   = "dila_whitelist.db"
-        private const val DB_VERSION = 1  // Incrémenter à chaque regénération
+        private const val DB_VERSION = 2  // Incrémenté 13/08/2026 : base régénérée (66 069 numéros)
 
         @Volatile
         private var INSTANCE: DilaLookupHelper? = null
@@ -78,14 +78,14 @@ class DilaLookupHelper private constructor(context: Context) {
     data class DilaInfo(
         /** Ex: "Mairie - Fontaine-le-Port" */
         val nom       : String,
-        /** Ex: "Mairie", "Gendarmerie", "CPAM" */
+        /** Ex: "mairie", "gendarmerie", "commissariat_police" */
         val categorie : String,
         /** Code INSEE commune (ex: "77188") */
         val commune   : String,
     ) {
         /**
          * Résumé compact pour l'UI — affiché sous le nom dans InCallScreen.
-         * Ex: "📍 Mairie · Fontaine-le-Port"
+         * Ex: "📍 mairie · Fontaine-le-Port"
          */
         val displaySummary: String get() = "$categorie · $nom"
 
