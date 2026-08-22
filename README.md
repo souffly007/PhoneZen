@@ -68,7 +68,7 @@ PhoneZen est une application téléphone open-source pour Android qui remplace l
 | Base de données locale | Room |
 | Persistance | DataStore |
 | Images | Coil |
-| Backend communautaire | Firebase Firestore |
+| Backend communautaire | Supabase |
 | Build | Gradle KTS |
 
 ---
@@ -102,7 +102,12 @@ cd PhoneZen
 ./gradlew assembleRelease
 ```
 
-> ⚠️ Un fichier `google-services.json` valide est nécessaire pour les fonctionnalités Firebase (liste participative). Crée ton propre projet Firebase et place le fichier dans `app/`.
+> ⚠️ Un fichier `local.properties` avec les identifiants de ton propre projet Supabase est nécessaire pour la liste participative communautaire :
+> ```properties
+> supabase_url=https://xxxxx.supabase.co
+> supabase_publishable_key=sb_publishable_xxxxx
+> ```
+> Crée ton propre projet sur [supabase.com](https://supabase.com), puis renseigne les clés ci-dessus dans `local.properties` à la racine du projet.
 
 ---
 
@@ -113,7 +118,7 @@ app/
 ├── data/
 │   ├── local/          # Room — base de données locale
 │   ├── model/          # Modèles de données
-│   └── repository/     # ReportRepository (Firebase)
+│   └── repository/     # ReportRepository (Supabase)
 ├── service/            # CallScreeningService
 ├── ui/
 │   ├── screens/        # Écrans Compose
