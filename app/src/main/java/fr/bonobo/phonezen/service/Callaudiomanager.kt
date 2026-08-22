@@ -14,8 +14,6 @@ import android.media.AudioManager
 import fr.bonobo.phonezen.data.model.AudioRoute
 import android.os.Build
 import android.util.Log
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * Gère le focus audio et les paramètres de routage pendant les appels,
@@ -25,9 +23,13 @@ import javax.inject.Singleton
  * - Lors d'un double appel, on NE relâche PAS le focus audio.
  * - Le hold/resume du 2e appel est géré exclusivement via TelecomManager/Call API.
  * - Aucun changement de mode AudioManager pendant la bascule entre appels.
+ *
+ * Pas de framework DI (Hilt/Dagger) dans ce projet — instancier manuellement,
+ * idéalement comme singleton `by lazy` depuis PhoneZenApp ou le composant appelant :
+ *
+ *   val callAudioManager by lazy { CallAudioManager(applicationContext) }
  */
-@Singleton
-class CallAudioManager @Inject constructor(
+class CallAudioManager(
     private val context: Context
 ) {
 

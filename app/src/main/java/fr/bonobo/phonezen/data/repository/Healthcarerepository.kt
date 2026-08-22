@@ -37,7 +37,7 @@ class HealthcareRepository(
         // ── Supabase ──────────────────────────────────────────────────────
         // Remplace par tes vraies valeurs (ou lis-les depuis BuildConfig)
         private const val SUPABASE_URL     = BuildConfig.SUPABASE_URL
-        private const val SUPABASE_API_KEY = BuildConfig.SUPABASE_ANON_KEY
+        private const val SUPABASE_API_KEY = BuildConfig.SUPABASE_PUBLISHABLE_KEY
         private const val TABLE            = "healthcare_numbers"
 
         // Endpoint REST Supabase — récupère uniquement les entrées vérifiées

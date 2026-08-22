@@ -18,12 +18,19 @@ import java.time.format.DateTimeFormatter
  * Repository pour la liste participative des numéros indésirables.
  * Backend : Supabase (PostgreSQL REST API).
  * Compatible F-Droid — aucune dépendance Google/Firebase.
+ *
+ * Sécurité : l'incrément de signalement passe par la fonction RPC
+ * `report_number` (SECURITY DEFINER côté Postgres) plutôt que par un
+ * UPDATE direct sur la table — la clé publishable étant lisible par
+ * quiconque décompile l'APK, un UPDATE libre permettrait de falsifier
+ * les compteurs. La RPC ne permet que l'opération "incrémenter de 1".
  */
 class ReportRepository {
 
     private val supabaseUrl = BuildConfig.SUPABASE_URL
-    private val supabaseKey = BuildConfig.SUPABASE_ANON_KEY
+    private val supabaseKey = BuildConfig.SUPABASE_PUBLISHABLE_KEY
     private val tableUrl    = "$supabaseUrl/rest/v1/${ReportedNumber.TABLE}"
+    private val rpcUrl      = "$supabaseUrl/rest/v1/rpc/report_number"
 
     private val client = HttpClient(Android) {
         install(ContentNegotiation) {
@@ -39,73 +46,29 @@ class ReportRepository {
         header("Content-Type",  "application/json")
     }
 
-    private fun nowIso(): String =
-        DateTimeFormatter.ISO_INSTANT.format(Instant.now())
-
-    /**
-     * Calcul dynamique du TTL selon le nombre de signalements :
-     *   10–19  → 30 jours
-     *   20–49  → 60 jours
-     *   50–99  → 90 jours
-     *   100+   → 180 jours
-     *
-     * Appelé APRÈS l'incrément donc on passe déjà le nouveau total.
-     */
-    private fun expiresIso(reports: Long): String {
-        val days = when {
-            reports >= 100 -> 180L
-            reports >= 50  -> 90L
-            reports >= 20  -> 60L
-            else           -> 30L
-        }
-        return DateTimeFormatter.ISO_INSTANT.format(
-            Instant.now().plusSeconds(days * 24 * 60 * 60)
-        )
-    }
-
     // ─────────────────────────────────────────────────────────────────────────
     // SIGNALER UN NUMÉRO
     // ─────────────────────────────────────────────────────────────────────────
 
     /**
-     * Signale un numéro comme indésirable.
-     * - Existe déjà → incrément + recalcul TTL dynamique
-     * - Nouveau     → insertion avec TTL initial (< 10 signalements → 30 jours)
+     * Signale un numéro comme indésirable via la fonction RPC sécurisée
+     * `report_number`. Le serveur gère lui-même l'incrément, le TTL
+     * dynamique et la fusion des tags — le client ne peut plus écrire
+     * de valeur arbitraire dans `reports` ou `expires_at`.
      */
     suspend fun reportNumber(number: String, tag: String = "indésirable"): Result<Unit> {
         return try {
             val normalized = PhoneUtils.normalizeNumber(number)
-            val existing   = fetchFromSupabase(normalized)
 
-            if (existing != null) {
-                val newReports = existing.reports + 1
-                val newTags    = (existing.tags + tag).distinct()
-                client.patch("$tableUrl?number=eq.$normalized") {
-                    supabaseHeaders()
-                    setBody("""
-                        {
-                          "reports":       $newReports,
-                          "last_reported": "${nowIso()}",
-                          "expires_at":    "${expiresIso(newReports)}",
-                          "tags":          ${tagsToJson(newTags)}
-                        }
-                    """.trimIndent())
-                }
-            } else {
-                // Premier signalement → 30 jours (< 10 signalements)
-                client.post(tableUrl) {
-                    supabaseHeaders()
-                    header("Prefer", "return=minimal")
-                    setBody("""
-                        {
-                          "number":        "$normalized",
-                          "reports":       1,
-                          "last_reported": "${nowIso()}",
-                          "expires_at":    "${expiresIso(1)}",
-                          "tags":          ${tagsToJson(listOf(tag))}
-                        }
-                    """.trimIndent())
-                }
+            client.post(rpcUrl) {
+                supabaseHeaders()
+                header("Prefer", "return=minimal")
+                setBody("""
+                    {
+                      "p_number": "$normalized",
+                      "p_tag":    "$tag"
+                    }
+                """.trimIndent())
             }
 
             cache.remove(normalized)
@@ -144,13 +107,12 @@ class ReportRepository {
      */
     suspend fun getTopReported(limit: Int = 50): List<ReportedNumber> {
         return try {
-            val nowIsoStr = nowIso()
+            val nowIsoStr = DateTimeFormatter.ISO_INSTANT.format(Instant.now())
             val response: HttpResponse = client.get(tableUrl) {
                 supabaseHeaders()
                 parameter("order",      "reports.desc")
                 parameter("limit",      limit.toString())
                 parameter("select",     "*")
-                // FIX : filtrer les expirés directement côté Supabase
                 parameter("expires_at", "gt.$nowIsoStr")
             }
             val body = response.bodyAsText()
@@ -179,7 +141,4 @@ class ReportRepository {
             .decodeFromString<List<ReportedNumber>>(body)
             .firstOrNull()
     }
-
-    private fun tagsToJson(tags: List<String>): String =
-        "[${tags.joinToString(",") { "\"$it\"" }}]"
 }
