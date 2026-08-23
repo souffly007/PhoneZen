@@ -9,15 +9,15 @@ plugins {
 }
 
 android {
-    namespace  = "fr.bonobo.phonezen"
+    namespace = "fr.bonobo.phonezen"
     compileSdk = 35
 
     defaultConfig {
         applicationId = "fr.bonobo.phonezen"
-        minSdk        = 24
-        targetSdk     = 35
-        versionCode   = 1
-        versionName   = "1.4e"
+        minSdk = 24
+        targetSdk = 35
+        versionCode = 1
+        versionName = "1.4e"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -29,7 +29,20 @@ android {
         }
 
         buildConfigField("String", "SUPABASE_URL", "\"${localProperties.getProperty("supabase_url", "")}\"")
-        buildConfigField("String", "SUPABASE_PUBLISHABLE_KEY", "\"${localProperties.getProperty("SUPABASE_PUBLISHABLE_KEY", "")}\"")
+        buildConfigField("String", "SUPABASE_PUBLISHABLE_KEY", "\"${localProperties.getProperty("supabase_publishable_key", "")}\"")
+    }
+
+    // ✅ FLAVORS : on isole Google Play Services
+    flavorDimensions += "distribution"
+    productFlavors {
+        create("fdroid") {
+            dimension = "distribution"
+            // Pas de Google Play Services ici
+        }
+        create("google") {
+            dimension = "distribution"
+            // Cette variante inclut les services Google (pour le mode conduite)
+        }
     }
 
     packaging {
@@ -100,21 +113,24 @@ dependencies {
     // DataStore
     implementation("androidx.datastore:datastore-preferences:1.0.0")
 
-    // Coroutines
+    // Coroutines / WorkManager
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
     implementation("androidx.work:work-runtime-ktx:2.9.0")
+    implementation("androidx.work:work-runtime-ktx:2.9.1")
     implementation("androidx.compose.foundation:foundation:1.10.5")
     implementation("androidx.compose.material3:material3:1.4.0")
     implementation("androidx.graphics:graphics-path:1.1.0-rc01")
 
+    // Coil
     implementation("io.coil-kt:coil-compose:2.6.0")
 
+    // Debug
     debugImplementation("androidx.compose.ui:ui-tooling")
-
-    // WorkManager Kotlin
-    implementation("androidx.work:work-runtime-ktx:2.9.1")
 
     // JavaMail pour Android (IMAP)
     implementation("com.sun.mail:android-mail:1.6.7")
     implementation("com.sun.mail:android-activation:1.6.7")
+
+    // ✅ Google Play Services : UNIQUEMENT pour le flavor "google"
+    googleImplementation("com.google.android.gms:play-services-location:21.0.1")
 }
