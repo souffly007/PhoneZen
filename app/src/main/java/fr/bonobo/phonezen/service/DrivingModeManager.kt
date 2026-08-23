@@ -221,9 +221,6 @@ class DrivingModeManager(private val context: Context) : SensorEventListener {
     }
 
     private fun onLocationUpdate(location: Location) {
-        // hasSpeed() peut être false selon le provider/l'appareil : dans ce
-        // cas on considère prudemment qu'il n'y a pas de mouvement détecté
-        // plutôt que d'halluciner une vitesse.
         val speedKmh  = if (location.hasSpeed()) location.speed * 3.6f else 0f
         val wasMoving = isGpsMoving
         isGpsMoving   = speedKmh >= SPEED_THRESHOLD_KMH
