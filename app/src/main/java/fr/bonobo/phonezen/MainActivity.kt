@@ -34,6 +34,7 @@ import fr.bonobo.phonezen.utils.VoicemailNotificationHelper
 import fr.bonobo.phonezen.data.model.CallStatus
 import android.telecom.Call
 import fr.bonobo.phonezen.service.CallManager
+import fr.bonobo.phonezen.service.DrivingModeService
 
 class MainActivity : ComponentActivity() {
 
@@ -65,7 +66,8 @@ class MainActivity : ComponentActivity() {
         Manifest.permission.ANSWER_PHONE_CALLS,
         Manifest.permission.VIBRATE,
         Manifest.permission.BLUETOOTH,
-        Manifest.permission.MODIFY_AUDIO_SETTINGS
+        Manifest.permission.MODIFY_AUDIO_SETTINGS,
+        Manifest.permission.ACCESS_FINE_LOCATION
     ).apply {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             add(Manifest.permission.POST_NOTIFICATIONS)
@@ -377,6 +379,22 @@ class MainActivity : ComponentActivity() {
         vm.loadData(this)
         preloadContactCache()
         refreshRoleStates()
+        startDrivingModeServiceIfPermitted()
+    }
+
+    private fun startDrivingModeServiceIfPermitted() {
+        val hasLocation = ContextCompat.checkSelfPermission(
+            this, Manifest.permission.ACCESS_FINE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
+
+        if (hasLocation) {
+            Log.d("MainActivity", "Démarrage de DrivingModeService")
+            ContextCompat.startForegroundService(
+                this, Intent(this, DrivingModeService::class.java)
+            )
+        } else {
+            Log.w("MainActivity", "Permission localisation absente, DrivingModeService non démarré")
+        }
     }
 
     private fun requestDialerRole() {
