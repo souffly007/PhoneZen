@@ -55,9 +55,8 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-
-    kotlin {
-        jvmToolchain(17)
+    kotlinOptions {
+        jvmTarget = "17"
     }
 
     buildFeatures {
@@ -118,7 +117,4 @@ dependencies {
     // JavaMail pour Android (IMAP)
     implementation("com.sun.mail:android-mail:1.6.7")
     implementation("com.sun.mail:android-activation:1.6.7")
-
-    implementation("com.google.android.gms:play-services-location:21.3.0")
-
 }
