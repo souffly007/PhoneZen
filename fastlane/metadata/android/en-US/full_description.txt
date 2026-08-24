@@ -1,0 +1,7 @@
+PhoneZen replaces your default phone application with a smarter, privacy-respecting experience.
+
+Key Features:
+• Advanced Anti-Spam: Built-in call blocker following ARCEP rules (Naegelen Law) and community-driven spam identification.
+• Driving Mode: Automatic SMS response and call handling while driving to keep you safe on the road.
+• Rich Call History: Clean, detailed, and searchable call log layout.
+• Privacy First: 100% free and open-source software. No proprietary dependencies, no Google Play Services, and no Firebase tracking.
