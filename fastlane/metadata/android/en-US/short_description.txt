@@ -1,1 +1,1 @@
-Privacy-friendly phone dialer with ARCEP anti-spam and drive mode auto-responder.
+Dialer intelligent et respectueux de la vie privée
