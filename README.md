@@ -8,6 +8,8 @@
 ![Version](https://img.shields.io/badge/Version-1.2-cyan)
 
 ---
+![Interface PhoneZen](PhoneZen-README.png)
+---
 
 ## 📸 Présentation
 
