@@ -34,17 +34,17 @@ class BlockedCallActionReceiver : BroadcastReceiver() {
         val action = intent.getStringExtra("action") ?: return
 
         if (action == "whitelist") {
-            val normalized = PhoneUtils.normalizeNumber(number)
+            val normalized = fr.bonobo.phonezen.utils.InternationalNumbers.e164(number, PhoneUtils.regionProvider())
+            if (normalized == null) {
+                Toast.makeText(context, context.getString(fr.bonobo.phonezen.R.string.country_number_needed), Toast.LENGTH_LONG).show()
+                return
+            }
             val detector = SpamDetector(context)
 
             detector.addToWhitelist(normalized)
             detector.removeCommunityBlocked(normalized)
 
-            val alt = when {
-                normalized.startsWith("+33") -> "0" + normalized.substring(3)
-                normalized.startsWith("0") -> "+33" + normalized.substring(1)
-                else -> null
-            }
+            val alt = fr.bonobo.phonezen.utils.InternationalNumbers.frenchLocal(normalized, null)
             CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
                 try {
                     val db = AppDatabase.getDatabase(context)

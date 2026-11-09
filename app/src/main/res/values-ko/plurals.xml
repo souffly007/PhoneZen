@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="selected_calls">
+        <item quantity="other">"%1$d개 선택됨"</item>
+    </plurals>
+    <plurals name="load_remaining">
+        <item quantity="other">"남은 항목 %1$d개 불러오기"</item>
+    </plurals>
+    <plurals name="more_calls">
+        <item quantity="other">"… 외 %1$d개"</item>
+    </plurals>
+    <plurals name="crash_reports">
+        <item quantity="other">"보고서 %1$d개 있음"</item>
+    </plurals>
+    <plurals name="protected_numbers">
+        <item quantity="other">"보호된 번호 %1$d개"</item>
+    </plurals>
+    <plurals name="reported_numbers">
+        <item quantity="other">"커뮤니티에서 신고한 번호 %1$d개"</item>
+    </plurals>
+    <plurals name="remaining_days">
+        <item quantity="other">"%1$d일 남음"</item>
+    </plurals>
+    <plurals name="duration_days">
+        <item quantity="other">"%1$d일"</item>
+    </plurals>
+    <plurals name="report_count">
+        <item quantity="other">"신고 %1$d건"</item>
+    </plurals>
+</resources>
+

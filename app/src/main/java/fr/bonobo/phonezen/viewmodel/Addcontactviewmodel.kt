@@ -56,7 +56,7 @@ class AddContactViewModel(
         selectedAccount : Account?
     ) {
         if (firstName.isBlank() && lastName.isBlank() && phones.all { it.isBlank() }) {
-            _uiState.value = AddContactUiState.Error("Veuillez renseigner au moins un nom ou un numéro.")
+            _uiState.value = AddContactUiState.Error(appContext.getString(fr.bonobo.phonezen.R.string.extra_contact_required))
             return
         }
         viewModelScope.launch(Dispatchers.IO) {
@@ -71,7 +71,7 @@ class AddContactViewModel(
                 )
             )
             _uiState.value = if (success) AddContactUiState.Success
-            else AddContactUiState.Error("Échec de la création du contact.")
+            else AddContactUiState.Error(appContext.getString(fr.bonobo.phonezen.R.string.extra_contact_failed))
         }
     }
 

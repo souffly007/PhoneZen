@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="country_title">"🌍 Land und Schutz"</string>
+    <string name="country_default">"Ersatzland / Kontakte"</string>
+    <string name="country_manual">"Manuell"</string>
+    <string name="country_unknown">"Unbestimmt"</string>
+    <string name="country_choose">"Land auswählen"</string>
+    <string name="country_no_lines">"Keine Leitung verfügbar. Telefonberechtigung prüfen oder Ersatzland wählen."</string>
+    <string name="country_explanation">"Das Land dient zur Zuordnung von Nummern ohne internationale Vorwahl. SIM-Erkennung oder manuelle Auswahl, unabhängig von der Sprache. Das Ersatzland gilt auch für Kontakte."</string>
+    <string name="country_rules">"Allgemeiner Schutz: Listen, Profile und Zeitpläne. Französische Filter gelten nur für als französisch erkannte Nummern; ausländische Vorwahlen werden nicht standardmäßig blockiert."</string>
+    <string name="country_number_needed">"Land in den Einstellungen wählen oder vollständige Nummer mit + und Ländervorwahl verwenden."</string>
+</resources>
+

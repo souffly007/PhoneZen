@@ -11,12 +11,13 @@ package fr.bonobo.phonezen.service
 
 import android.app.*
 import android.content.Intent
+import android.content.res.Configuration
+import android.os.Build
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import fr.bonobo.phonezen.MainActivity
 import fr.bonobo.phonezen.R
-import androidx.core.app.NotificationManagerCompat
 
 /**
  * Service foreground qui maintient DrivingModeManager actif en arrière-plan.
@@ -49,15 +50,24 @@ class DrivingModeService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
-    private fun createNotificationChannel() {
-        val channel = NotificationChannel(
-            CHANNEL_ID,
-            "Mode conduite",
-            NotificationManager.IMPORTANCE_LOW
-        ).apply { description = "Détection automatique du mode conduite" }
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        createNotificationChannel()
+        startForeground(NOTIFICATION_ID, buildNotification())
+    }
 
-        getSystemService(NotificationManager::class.java)
-            .createNotificationChannel(channel)
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        val manager = getSystemService(NotificationManager::class.java)
+        val channel = manager.getNotificationChannel(CHANNEL_ID) ?: NotificationChannel(
+            CHANNEL_ID,
+            getString(R.string.notif_driving_title),
+            NotificationManager.IMPORTANCE_LOW
+        )
+        channel.name = getString(R.string.notif_driving_title)
+        channel.description = getString(R.string.notif_driving_desc)
+
+        manager.createNotificationChannel(channel)
     }
 
     private fun buildNotification(): Notification {
@@ -67,8 +77,9 @@ class DrivingModeService : Service() {
             PendingIntent.FLAG_IMMUTABLE
         )
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("Mode conduite")
-            .setContentText("Détection en cours…")
+            .setContentTitle(getString(R.string.notif_driving_title))
+            .setContentText(getString(R.string.notif_driving_detecting))
+            .setOnlyAlertOnce(true)
             .setSmallIcon(R.drawable.ic_menu_call)
             .setContentIntent(pi)
             .setOngoing(true)

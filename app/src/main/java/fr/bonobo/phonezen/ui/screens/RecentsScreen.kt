@@ -3,6 +3,8 @@
 // This file is part of PhoneZen.
 package fr.bonobo.phonezen.ui.screens
 
+import fr.bonobo.phonezen.R
+
 import android.content.Intent
 import android.net.Uri
 import android.provider.CallLog
@@ -43,12 +45,12 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
 
-enum class CallFilter(val label: String, val icon: ImageVector) {
-    ALL("Tous", Icons.Default.List),
-    MISSED("Manqués", Icons.Default.CallMissed),
-    INCOMING("Entrants", Icons.Default.CallReceived),
-    OUTGOING("Sortants", Icons.Default.CallMade),
-    BLOCKED("Bloqués", Icons.Default.Block)
+enum class CallFilter(val labelRes: Int, val icon: ImageVector) {
+    ALL(R.string.filter_all, Icons.Default.List),
+    MISSED(R.string.filter_missed, Icons.Default.CallMissed),
+    INCOMING(R.string.filter_incoming, Icons.Default.CallReceived),
+    OUTGOING(R.string.filter_outgoing, Icons.Default.CallMade),
+    BLOCKED(R.string.filter_blocked, Icons.Default.Block)
 }
 
 val IncomingColor = Color(0xFFFFAB40)
@@ -69,7 +71,7 @@ private fun safeTypeEquals(type: Int, ref: Int) = try { type == ref             
 private data class TrustIndicator(
     val icon  : ImageVector,
     val color : Color,
-    val label : String
+    val labelRes : Int
 )
 
 private fun resolveTrustIndicator(
@@ -81,15 +83,14 @@ private fun resolveTrustIndicator(
     if (isContact) return TrustIndicator(
         icon  = Icons.Default.VerifiedUser,
         color = Color(0xFF22C55E),
-        label = "Contact de confiance"
+        labelRes = R.string.trusted_contact
     )
     val normalized = PhoneUtils.normalizeNumber(number)
-    val isMobile   = normalized.startsWith("06") || normalized.startsWith("07")
-            || normalized.startsWith("+336") || normalized.startsWith("+337")
+    val isMobile = normalized.startsWith("+336") || normalized.startsWith("+337")
     if (isMobile) return TrustIndicator(
         icon  = Icons.Default.Warning,
         color = Color(0xFFF97316),
-        label = "Mobile inconnu"
+        labelRes = R.string.unknown_mobile
     )
     return null
 }
@@ -112,7 +113,7 @@ fun RecentsScreen(
     var searchQuery   by remember { mutableStateOf("") }
     var showSearch    by remember { mutableStateOf(false) }
     var selectionMode by remember { mutableStateOf(false) }
-    val selectedNumbers = remember { mutableStateSetOf<String>() }
+    var selectedNumbers by remember { mutableStateOf(setOf<String>()) }
     var showContent   by remember { mutableStateOf(false) }
 
     val listState      = rememberLazyListState()
@@ -149,7 +150,7 @@ fun RecentsScreen(
 
     fun deleteSelectedCalls() {
         selectedNumbers.forEach { vm.removeCallGroup(it) }
-        selectedNumbers.clear()
+        selectedNumbers = emptySet()
         selectionMode = false
     }
 
@@ -162,11 +163,11 @@ fun RecentsScreen(
                         modifier          = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        IconButton(onClick = { selectionMode = false; selectedNumbers.clear() }) {
+                        IconButton(onClick = { selectionMode = false; selectedNumbers = emptySet() }) {
                             Icon(Icons.Default.Close, null, tint = c.textPrimary)
                         }
                         Text(
-                            "${selectedNumbers.size} sélectionné${if (selectedNumbers.size > 1) "s" else ""}",
+                            context.resources.getQuantityString(R.plurals.selected_calls, selectedNumbers.size, selectedNumbers.size),
                             modifier   = Modifier.weight(1f),
                             fontSize   = 16.sp,
                             fontWeight = FontWeight.Medium,
@@ -191,7 +192,7 @@ fun RecentsScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        "JOURNAL",
+                        context.getString(R.string.journal_title),
                         modifier   = Modifier.weight(1f),
                         fontSize   = 20.sp,
                         fontWeight = FontWeight.ExtraBold,
@@ -232,7 +233,7 @@ fun RecentsScreen(
                         value         = searchQuery,
                         onValueChange = { searchQuery = it },
                         modifier      = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                        placeholder   = { Text("Rechercher...", color = c.textSecond) },
+                        placeholder   = { Text(context.getString(R.string.search_hint), color = c.textSecond) },
                         singleLine    = true,
                         colors        = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor   = c.neonCyan,
@@ -252,7 +253,7 @@ fun RecentsScreen(
                                 activeFilter = filter
                                 coroutineScope.launch { listState.scrollToItem(0) }
                             },
-                            label       = { Text(filter.label, fontSize = 12.sp) },
+                            label       = { Text(context.getString(filter.labelRes), fontSize = 12.sp) },
                             leadingIcon = { Icon(filter.icon, null, modifier = Modifier.size(16.dp)) },
                             colors      = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor  = c.neonCyan.copy(0.2f),
@@ -288,13 +289,13 @@ fun RecentsScreen(
                             isSelected       = selectedNumbers.contains(group.number),
                             onToggleSelection = {
                                 if (selectedNumbers.contains(group.number)) {
-                                    selectedNumbers.remove(group.number)
+                                    selectedNumbers = selectedNumbers - group.number
                                     if (selectedNumbers.isEmpty()) selectionMode = false
                                 } else {
-                                    selectedNumbers.add(group.number)
+                                    selectedNumbers = selectedNumbers + group.number
                                 }
                             },
-                            onLongClick = { selectionMode = true; selectedNumbers.add(group.number) }
+                            onLongClick = { selectionMode = true; selectedNumbers = selectedNumbers + group.number }
                         )
                         HorizontalDivider(color = c.glassStroke, thickness = 0.5.dp)
                     }
@@ -307,7 +308,7 @@ fun RecentsScreen(
                                 colors   = ButtonDefaults.buttonColors(containerColor = c.surface, contentColor = c.neonCyan),
                                 shape    = RoundedCornerShape(12.dp)
                             ) {
-                                Text("Charger $remainingCount élément${if (remainingCount > 1) "s" else ""} restant${if (remainingCount > 1) "s" else ""}")
+                                Text(context.resources.getQuantityString(R.plurals.load_remaining, remainingCount, remainingCount))
                             }
                         }
                     }
@@ -456,6 +457,7 @@ fun CallGroupRow(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         text       = group.name ?: group.number,
+                        style = androidx.compose.material3.LocalTextStyle.current.copy(textDirection = androidx.compose.ui.text.style.TextDirection.ContentOrLtr),
                         fontSize   = 16.sp,
                         fontWeight = FontWeight.SemiBold,
                         color      = nameColor,
@@ -469,7 +471,7 @@ fun CallGroupRow(
                     }
                 }
                 if (isKnown) {
-                    Text(group.number, fontSize = 12.sp, color = c.textSecond.copy(alpha = 0.7f))
+                    Text(group.number, style = androidx.compose.material3.LocalTextStyle.current.copy(textDirection = androidx.compose.ui.text.style.TextDirection.Ltr), fontSize = 12.sp, color = c.textSecond.copy(alpha = 0.7f))
                 }
 
                 // ── Ligne de stats + indicateurs ──────────────────────────
@@ -515,7 +517,7 @@ fun CallGroupRow(
                         Spacer(Modifier.width(4.dp))
                         Icon(
                             imageVector        = trust.icon,
-                            contentDescription = trust.label,
+                            contentDescription = context.getString(trust.labelRes),
                             tint               = trust.color,
                             modifier           = Modifier.size(12.dp)
                         )
@@ -544,11 +546,11 @@ fun CallGroupRow(
                     ) {
                         if (!isBlocked) {
                             DropdownMenuItem(
-                                text    = { Text("📞 Appeler", color = c.neonGreen) },
+                                text    = { Text(context.getString(R.string.call_action), color = c.neonGreen) },
                                 onClick = { onCall(group.number); showMenu = false }
                             )
                             DropdownMenuItem(
-                                text    = { Text("💬 Envoyer un SMS", color = c.neonCyan) },
+                                text    = { Text(context.getString(R.string.sms_action), color = c.neonCyan) },
                                 onClick = {
                                     try {
                                         context.startActivity(Intent(Intent.ACTION_SENDTO).apply {
@@ -561,39 +563,39 @@ fun CallGroupRow(
                         }
                         if (!isKnown) {
                             DropdownMenuItem(
-                                text        = { Text("Ajouter aux contacts", color = c.textPrimary) },
+                                text        = { Text(context.getString(R.string.add_contact), color = c.textPrimary) },
                                 leadingIcon = { Icon(Icons.Default.PersonAdd, null, tint = c.neonCyan) },
                                 onClick     = { onAddContact(group.number); showMenu = false }
                             )
                         }
                         if (contactId != null) {
                             DropdownMenuItem(
-                                text    = { Text("✏️ Modifier le contact", color = c.textPrimary) },
+                                text    = { Text(context.getString(R.string.edit_contact), color = c.textPrimary) },
                                 onClick = { onEditContact(contactId); showMenu = false }
                             )
                         }
                         DropdownMenuItem(
-                            text    = { Text("📝 Note / Commentaire", color = c.textPrimary) },
+                            text    = { Text(context.getString(R.string.note_action), color = c.textPrimary) },
                             onClick = { showMenu = false }
                         )
                         if (!whitelisted) {
                             DropdownMenuItem(
-                                text    = { Text("🛡️ Liste Blanche", color = c.neonCyan) },
+                                text    = { Text(context.getString(R.string.allow_action), color = c.neonCyan) },
                                 onClick = { vm.addToWhitelist(group.number); showMenu = false }
                             )
                         } else {
                             DropdownMenuItem(
-                                text    = { Text("🔓 Retirer Liste Blanche", color = c.textPrimary) },
+                                text    = { Text(context.getString(R.string.unallow_action), color = c.textPrimary) },
                                 onClick = { vm.removeFromWhitelist(group.number); showMenu = false }
                             )
                         }
                         DropdownMenuItem(
-                            text    = { Text("⚠️ Signaler & Bloquer", color = c.neonOrange) },
+                            text    = { Text(context.getString(R.string.report_action), color = c.neonOrange) },
                             onClick = { vm.reportNumber(group.number, "Indésirable"); showMenu = false }
                         )
                         HorizontalDivider(color = c.glassStroke)
                         DropdownMenuItem(
-                            text    = { Text("🗑️ Supprimer", color = c.neonRed) },
+                            text    = { Text(context.getString(R.string.delete_action), color = c.neonRed) },
                             onClick = { vm.removeCallGroup(group.number); showMenu = false }
                         )
                     }
@@ -611,10 +613,7 @@ fun CallGroupRow(
             ) {
                 if (periodDays > 0) {
                     Text(
-                        "📊 Sur ${periodDays} jour${if (periodDays > 1) "s" else ""} : " +
-                                "${outgoingCount} sortant${if (outgoingCount > 1) "s" else ""}, " +
-                                "${incomingCount} entrant${if (incomingCount > 1) "s" else ""}, " +
-                                "${missedCount} manqué${if (missedCount > 1) "s" else ""}",
+                        context.getString(R.string.call_stats, periodDays, outgoingCount, incomingCount, missedCount),
                         fontSize = 11.sp,
                         color    = c.textSecond,
                         modifier = Modifier.padding(bottom = 6.dp)
@@ -630,11 +629,11 @@ fun CallGroupRow(
                         else                                            -> Icons.Default.Call         to c.textSecond
                     }
                     val typeLabel = when {
-                        safeTypeEquals(call.type, SAFE_OUTGOING_TYPE) -> "Sortant"
-                        safeTypeEquals(call.type, SAFE_INCOMING_TYPE) -> "Entrant"
-                        safeTypeEquals(call.type, SAFE_MISSED_TYPE)   -> "Manqué"
-                        safeIsBlocked(call.type)                       -> "Bloqué"
-                        else                                            -> "Appel"
+                        safeTypeEquals(call.type, SAFE_OUTGOING_TYPE) -> context.getString(R.string.outgoing)
+                        safeTypeEquals(call.type, SAFE_INCOMING_TYPE) -> context.getString(R.string.incoming)
+                        safeTypeEquals(call.type, SAFE_MISSED_TYPE)   -> context.getString(R.string.missed)
+                        safeIsBlocked(call.type)                       -> context.getString(R.string.blocked)
+                        else                                            -> context.getString(R.string.call)
                     }
                     val duration = try {
                         if (call.duration > 0) {
@@ -665,7 +664,7 @@ fun CallGroupRow(
 
                 if (group.calls.size > 10) {
                     Text(
-                        "... et ${group.calls.size - 10} autre${if (group.calls.size - 10 > 1) "s" else ""}",
+                        context.resources.getQuantityString(R.plurals.more_calls, group.calls.size - 10, group.calls.size - 10),
                         fontSize = 10.sp,
                         color    = c.textSecond,
                         modifier = Modifier.padding(top = 4.dp)

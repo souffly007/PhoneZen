@@ -11,6 +11,8 @@ import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.serialization.kotlinx.json.*
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import java.time.Instant
 import java.time.format.DateTimeFormatter
 
@@ -33,6 +35,7 @@ class ReportRepository {
     private val rpcUrl      = "$supabaseUrl/rest/v1/rpc/report_number"
 
     private val client = HttpClient(Android) {
+        expectSuccess = true
         install(ContentNegotiation) {
             json(Json { ignoreUnknownKeys = true; isLenient = true })
         }
@@ -58,17 +61,13 @@ class ReportRepository {
      */
     suspend fun reportNumber(number: String, tag: String = "indésirable"): Result<Unit> {
         return try {
-            val normalized = PhoneUtils.normalizeNumber(number)
+            val normalized = fr.bonobo.phonezen.utils.InternationalNumbers.communityKey(number, PhoneUtils.regionProvider())
+                ?: return Result.failure(IllegalArgumentException("International number required"))
 
             client.post(rpcUrl) {
                 supabaseHeaders()
                 header("Prefer", "return=minimal")
-                setBody("""
-                    {
-                      "p_number": "$normalized",
-                      "p_tag":    "$tag"
-                    }
-                """.trimIndent())
+                setBody(buildJsonObject { put("p_number", normalized); put("p_tag", tag) })
             }
 
             cache.remove(normalized)
@@ -86,8 +85,9 @@ class ReportRepository {
 
     suspend fun checkNumber(number: String): ReportedNumber? {
         return try {
-            val normalized = PhoneUtils.normalizeNumber(number)
-            if (cache.containsKey(normalized)) return cache[normalized]
+            val normalized = fr.bonobo.phonezen.utils.InternationalNumbers.communityKey(number, PhoneUtils.regionProvider())
+                ?: return null
+            // Fresh response required: reports and expiry may change.
             val result = fetchFromSupabase(normalized)
             cache[normalized] = result
             result
@@ -116,7 +116,9 @@ class ReportRepository {
                 parameter("expires_at", "gt.$nowIsoStr")
             }
             val body = response.bodyAsText()
-            Json { ignoreUnknownKeys = true }.decodeFromString<List<ReportedNumber>>(body)
+            Json { ignoreUnknownKeys = true }.decodeFromString<List<ReportedNumber>>(body).map { row ->
+                row.copy(number = fr.bonobo.phonezen.utils.InternationalNumbers.e164(row.number, "FR") ?: row.number)
+            }
         } catch (e: Exception) {
             Log.e("ReportRepository", "getTopReported failed: ${e.message}", e)
             emptyList()
@@ -133,6 +135,7 @@ class ReportRepository {
         val response: HttpResponse = client.get(tableUrl) {
             supabaseHeaders()
             parameter("number", "eq.$normalized")
+            parameter("expires_at", "gt.${DateTimeFormatter.ISO_INSTANT.format(Instant.now())}")
             parameter("select", "*")
             parameter("limit",  "1")
         }

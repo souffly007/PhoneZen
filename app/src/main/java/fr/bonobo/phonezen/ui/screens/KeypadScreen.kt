@@ -1,5 +1,7 @@
 package fr.bonobo.phonezen.ui.screens
 
+import fr.bonobo.phonezen.R
+
 import android.app.Activity
 import android.content.Intent
 import android.speech.RecognizerIntent
@@ -43,6 +45,9 @@ import fr.bonobo.phonezen.util.SimInfo
 import fr.bonobo.phonezen.util.VoiceDialHelper
 import fr.bonobo.phonezen.util.getActiveSims
 import fr.bonobo.phonezen.viewmodel.MainViewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 
 data class Key(val main: String, val sub: String = "")
 
@@ -81,7 +86,7 @@ fun DialKey(
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(key.main, fontSize = fontSize.sp, fontWeight = FontWeight.Bold, color = c.neonOrange)
             if (key.sub.isNotEmpty()) {
-                Text(key.sub, fontSize = (fontSize * 0.35f).sp, color = c.textSecond)
+                Text(if (key.main == "1") androidx.compose.ui.res.stringResource(R.string.voicemail_short) else key.sub, fontSize = (fontSize * 0.35f).sp, color = c.textSecond)
             }
         }
     }
@@ -99,7 +104,15 @@ fun KeypadScreen(
     val clipboardManager = LocalClipboardManager.current
     var number       by remember { mutableStateOf("") }
 
-    val sims      = remember { getActiveSims(context) }
+    var sims by remember { mutableStateOf(getActiveSims(context)) }
+    val owner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    DisposableEffect(owner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) sims = getActiveSims(context)
+        }
+        owner.lifecycle.addObserver(observer)
+        onDispose { owner.lifecycle.removeObserver(observer) }
+    }
     val isDualSim = sims.size >= 2
     val isUssd    = remember(number) { isUssdCode(number) }
 
@@ -114,7 +127,14 @@ fun KeypadScreen(
 
     // ── Suggestions réactives ─────────────────────────────────────────────────
     val contactsList by vm.contacts.collectAsState()
-    val suggestions  = remember(number, contactsList) { vm.getSuggestions(number) }
+    var suggestions by remember { mutableStateOf<List<Contact>>(emptyList()) }
+    LaunchedEffect(number, contactsList) {
+        suggestions = emptyList()
+        if (number.length >= 3 && !isUssdCode(number)) {
+            delay(120)
+            suggestions = withContext(Dispatchers.Default) { vm.getSuggestions(number) }
+        }
+    }
 
     // ── États locaux ──────────────────────────────────────────────────────────
     var showSimDialog   by remember { mutableStateOf(false) }
@@ -175,7 +195,7 @@ fun KeypadScreen(
 
             val raw    = matches.firstOrNull() ?: return@rememberLauncherForActivityResult
             val parsed = VoiceDialHelper.parseCommand(raw) ?: run {
-                Toast.makeText(context, "Commande non reconnue : $raw", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, context.getString(R.string.voice_unknown, raw), Toast.LENGTH_SHORT).show()
                 return@rememberLauncherForActivityResult
             }
 
@@ -187,7 +207,7 @@ fun KeypadScreen(
                 val found = vm.findContactsByName(parsed)
                 when {
                     found.isEmpty() -> {
-                        Toast.makeText(context, "Contact « $parsed » introuvable", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, context.getString(R.string.contact_not_found, parsed), Toast.LENGTH_SHORT).show()
                     }
                     found.size == 1 -> {
                         // Un seul contact trouvé → appel direct ou picker si multi-numéros
@@ -206,16 +226,16 @@ fun KeypadScreen(
     fun launchVoiceRecognition() {
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "fr-FR")
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "fr-FR")
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, context.resources.configuration.locales[0].toLanguageTag())
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, context.resources.configuration.locales[0].toLanguageTag())
             putExtra(RecognizerIntent.EXTRA_ONLY_RETURN_LANGUAGE_PREFERENCE, true)
-            putExtra(RecognizerIntent.EXTRA_PROMPT, "Dites « Appelle [nom] »")
+            putExtra(RecognizerIntent.EXTRA_PROMPT, context.getString(R.string.voice_prompt))
             putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
         }
         try {
             voiceLauncher.launch(intent)
         } catch (e: Exception) {
-            Toast.makeText(context, "Reconnaissance vocale non disponible", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, context.getString(R.string.voice_unavailable), Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -287,7 +307,7 @@ fun KeypadScreen(
             // ── Bloc 1 : Titre + numéro + suggestions ─────────────────────────
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
-                    text       = if (isUssd) "CODE USSD" else "CLAVIER",
+                    text       = if (isUssd) context.getString(R.string.ussd_title) else context.getString(R.string.keypad_title),
                     fontSize   = titleSize.sp,
                     color      = if (isUssd) c.neonCyan else c.neonOrange,
                     fontWeight = FontWeight.ExtraBold
@@ -314,7 +334,7 @@ fun KeypadScreen(
                     ) {
                         if (number.isEmpty()) {
                             Text(
-                                text      = "Composez un numéro",
+                                text      = context.getString(R.string.dial_hint),
                                 fontSize  = 15.sp,
                                 color     = c.textSecond,
                                 textAlign = TextAlign.Center
@@ -330,7 +350,8 @@ fun KeypadScreen(
                                     fontSize   = 26.sp,
                                     fontWeight = FontWeight.Bold,
                                     color      = if (isUssd) c.neonCyan else c.textPrimary,
-                                    textAlign  = TextAlign.Center
+                                    textAlign  = TextAlign.Center,
+                                    textDirection = androidx.compose.ui.text.style.TextDirection.Ltr
                                 ),
                                 cursorBrush = SolidColor(c.neonCyan),
                                 modifier    = Modifier.fillMaxWidth()
@@ -344,12 +365,12 @@ fun KeypadScreen(
                         onDismissRequest = { showPasteMenu = false }
                     ) {
                         DropdownMenuItem(
-                            text    = { Text("Coller") },
+                            text    = { Text(context.getString(R.string.paste)) },
                             onClick = { pasteFromClipboard(); showPasteMenu = false }
                         )
                         if (number.isNotEmpty()) {
                             DropdownMenuItem(
-                                text    = { Text("Effacer tout") },
+                                text    = { Text(context.getString(R.string.clear_all)) },
                                 onClick = { number = ""; showPasteMenu = false }
                             )
                         }
@@ -402,34 +423,39 @@ fun KeypadScreen(
                 }
             }
 
-            // ── Bloc 2 : Pavé numérique ───────────────────────────────────────
-            Column(
-                modifier            = Modifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                DIAL_KEYS.chunked(3).forEach { row ->
-                    Row(
-                        modifier              = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
-                        verticalAlignment     = Alignment.CenterVertically
-                    ) {
-                        row.forEach { key ->
-                            DialKey(
-                                key         = key,
-                                onTap       = { number += key.main },
-                                onLongPress = {
-                                    if (key.main == "0") number += "+"
-                                    if (key.main == "1") sims.firstOrNull()?.let {
-                                        onCallWithSim(it.voicemail, it.subscriptionId)
-                                    }
-                                },
-                                size     = keySize,
-                                fontSize = keyFontSize
-                            )
+            // The telephone keypad keeps its standard physical order in RTL locales.
+            CompositionLocalProvider(androidx.compose.ui.platform.LocalLayoutDirection provides androidx.compose.ui.unit.LayoutDirection.Ltr) {
+                // ── Bloc 2 : Pavé numérique ───────────────────────────────────────
+                Column(
+                    modifier            = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    DIAL_KEYS.chunked(3).forEach { row ->
+                        Row(
+                            modifier              = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceEvenly,
+                            verticalAlignment     = Alignment.CenterVertically
+                        ) {
+                            row.forEach { key ->
+                                DialKey(
+                                    key         = key,
+                                    onTap       = { number += key.main },
+                                    onLongPress = {
+                                        if (key.main == "0") number += "+"
+                                        if (key.main == "1") sims.firstOrNull()?.let {
+                                            fr.bonobo.phonezen.util.callVoicemail(context, it, onCallWithSim)
+                                        }
+                                    },
+                                    size     = keySize,
+                                    fontSize = keyFontSize
+                                )
+                            }
                         }
+                        Spacer(Modifier.height(spacingIn))
                     }
-                    Spacer(Modifier.height(spacingIn))
                 }
+    
+    
             }
 
             // ── Bloc 3 : Actions + Messagerie ─────────────────────────────────
@@ -502,6 +528,9 @@ fun KeypadScreen(
 
                 Spacer(Modifier.height(spacingOut))
 
+                TextButton(onClick = {
+                    fr.bonobo.phonezen.util.showVoicemailSettings(context) { sims = getActiveSims(context) }
+                }) { Text(context.getString(R.string.configure_vm_sim)) }
                 // ── Messagerie ────────────────────────────────────────────────
                 if (isDualSim) {
                     Row(
@@ -512,14 +541,14 @@ fun KeypadScreen(
                             SimVoicemailButton(
                                 sim      = sim,
                                 modifier = Modifier.weight(1f),
-                                onClick  = { onCallWithSim(sim.voicemail, sim.subscriptionId) }
+                                onClick  = { fr.bonobo.phonezen.util.callVoicemail(context, sim, onCallWithSim) }
                             )
                         }
                     }
                 } else {
                     sims.firstOrNull()?.let { sim ->
                         OutlinedButton(
-                            onClick  = { onCall(sim.voicemail) },
+                            onClick  = { fr.bonobo.phonezen.util.callVoicemail(context, sim, onCallWithSim) },
                             modifier = Modifier.fillMaxWidth(),
                             shape    = RoundedCornerShape(12.dp),
                             colors   = ButtonDefaults.outlinedButtonColors(
@@ -535,13 +564,13 @@ fun KeypadScreen(
                             Spacer(Modifier.width(8.dp))
                             Column(horizontalAlignment = Alignment.Start) {
                                 Text(
-                                    "MESSAGERIE",
+                                    context.getString(R.string.voicemail_title),
                                     fontWeight = FontWeight.Bold,
                                     fontSize   = 13.sp,
                                     color      = c.textPrimary
                                 )
                                 Text(
-                                    "${sim.carrierName} · ${sim.voicemail}",
+                                    "${sim.carrierName} · ${sim.voicemail.ifBlank { context.getString(R.string.not_configured) }}",
                                     fontSize = 11.sp,
                                     color    = c.textSecond,
                                     maxLines = 1,
@@ -563,6 +592,7 @@ private fun VoiceContactDialog(
     onSelect: (Contact) -> Unit,
     onDismiss: () -> Unit
 ) {
+    val context = LocalContext.current
     val c = LocalColors.current
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -571,7 +601,7 @@ private fun VoiceContactDialog(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.Mic, null, tint = c.neonCyan, modifier = Modifier.size(20.dp))
                 Spacer(Modifier.width(8.dp))
-                Text("Quel contact ?", color = c.textPrimary, fontWeight = FontWeight.Bold)
+                Text(context.getString(R.string.which_contact), color = c.textPrimary, fontWeight = FontWeight.Bold)
             }
         },
         text = {
@@ -620,7 +650,7 @@ private fun VoiceContactDialog(
         confirmButton = {},
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Annuler", color = c.textSecond)
+                Text(context.getString(R.string.cancel), color = c.textSecond)
             }
         }
     )
@@ -634,16 +664,17 @@ private fun SimSelectionDialog(
     onSelect: (SimInfo) -> Unit,
     onDismiss: () -> Unit
 ) {
+    val context = LocalContext.current
     val c = LocalColors.current
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor   = c.surfaceVar,
         title = {
-            Text("Choisir la SIM", color = c.textPrimary, fontWeight = FontWeight.Bold)
+            Text(context.getString(R.string.choose_sim), color = c.textPrimary, fontWeight = FontWeight.Bold)
         },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(text = "Appeler $number avec :", fontSize = 13.sp, color = c.textSecond)
+                Text(text = context.getString(R.string.call_using, number), fontSize = 13.sp, color = c.textSecond)
                 sims.forEach { sim ->
                     val simColor = if (sim.slotIndex == 0) c.neonCyan else c.neonOrange
                     Card(
@@ -686,7 +717,7 @@ private fun SimSelectionDialog(
         confirmButton = {},
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Annuler", color = c.textSecond)
+                Text(context.getString(R.string.cancel), color = c.textSecond)
             }
         }
     )
@@ -694,6 +725,7 @@ private fun SimSelectionDialog(
 
 @Composable
 private fun SimVoicemailButton(sim: SimInfo, modifier: Modifier, onClick: () -> Unit) {
+    val context = LocalContext.current
     val c        = LocalColors.current
     val simColor = if (sim.slotIndex == 0) c.neonCyan else c.neonOrange
     OutlinedButton(
@@ -722,7 +754,7 @@ private fun SimVoicemailButton(sim: SimInfo, modifier: Modifier, onClick: () -> 
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
-            Text(sim.voicemail, fontSize = 10.sp, color = c.textSecond, maxLines = 1)
+            Text(sim.voicemail.ifBlank { context.getString(R.string.not_configured) }, fontSize = 10.sp, color = c.textSecond, maxLines = 1)
         }
     }
 }

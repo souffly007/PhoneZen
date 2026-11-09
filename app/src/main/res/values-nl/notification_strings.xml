@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="notif_driving_title">"Rijmodus"</string>
+    <string name="notif_driving_desc">"Automatische detectie van de rijmodus"</string>
+    <string name="notif_driving_detecting">"Detectie actief…"</string>
+    <string name="notif_call_ongoing">"Oproep bezig"</string>
+    <string name="notif_phone_call">"Telefoongesprek"</string>
+    <string name="notif_open">"Openen"</string>
+    <string name="notif_active_channel">"Actieve oproepen"</string>
+    <string name="notif_active_desc">"Geeft aan dat PhoneZen de huidige oproep beheert"</string>
+    <string name="notif_blocked_channel">"Beveiliging (spam)"</string>
+    <string name="notif_blocked_desc">"Meldingen over door PhoneZen geblokkeerde nummers"</string>
+    <string name="notif_voicemail_channel">"Voicemail"</string>
+    <string name="notif_voicemail_desc">"Voicemailmeldingen"</string>
+</resources>
+

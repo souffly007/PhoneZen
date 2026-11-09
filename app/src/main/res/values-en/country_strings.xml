@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="country_title">"🌍 Country and protection"</string>
+    <string name="country_default">"Fallback country / contacts"</string>
+    <string name="country_manual">"Manual"</string>
+    <string name="country_unknown">"Undetermined"</string>
+    <string name="country_choose">"Choose a country"</string>
+    <string name="country_no_lines">"No accessible line. Check Phone permission or choose a fallback country."</string>
+    <string name="country_explanation">"The country identifies numbers without an international prefix. Use SIM detection or a manual choice, independently of language. The fallback country also applies to contacts."</string>
+    <string name="country_rules">"Generic protection everywhere: lists, profiles and schedules. French filters apply only to numbers identified as French; no foreign prefix is blocked by default."</string>
+    <string name="country_number_needed">"Choose the country in Settings or use a complete number with + and its country code."</string>
+</resources>
+

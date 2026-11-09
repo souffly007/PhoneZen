@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="profiles_title">"Blocking profiles"</string>
+    <string name="profiles_explain1">"The active profile overrides other blocking rules. "</string>
+    <string name="profiles_explain2">"The allowlist always takes priority."</string>
+    <string name="profiles_allowed">"✅ Allowed"</string>
+    <string name="profiles_blocked">"🚫 Blocked"</string>
+    <string name="profiles_ideal">"💡 Ideal for"</string>
+    <string name="work_details">"Contacts, favorites and non-premium French 08/09 numbers"</string>
+    <string name="work_blocked">"ARCEP sales calls, community reports and hidden numbers"</string>
+    <string name="work_ideal">"Office hours, waiting for business callbacks"</string>
+    <string name="home_details">"Contacts and favorites only"</string>
+    <string name="home_blocked">"Everyone else (unknown callers, sales calls, businesses…)"</string>
+    <string name="home_ideal">"Evenings and weekends at home"</string>
+    <string name="vacation_details">"Favorites and allowlist only"</string>
+    <string name="vacation_blocked">"Everyone else, including contacts outside favorites"</string>
+    <string name="vacation_ideal">"Vacations, long weekends, complete rest"</string>
+    <string name="night_dnd">"Do not disturb at night"</string>
+    <string name="night_summary">"Scheduled quiet hours"</string>
+    <string name="night_start">"START"</string>
+    <string name="night_end">"END"</string>
+    <string name="profile_active_badge">"ACTIVE"</string>
+    <string name="vacation_options">"⚙️ Vacation options"</string>
+    <string name="return_date">"Automatic return date"</string>
+    <string name="manual_disable">"Turn off manually"</string>
+    <string name="change_date">"Change"</string>
+    <string name="set_date">"Set"</string>
+    <string name="return_profile">"Profile after vacation"</string>
+    <string name="return_summary">"Switch automatically on the return date"</string>
+    <string name="submenu_cancel">"Cancel"</string>
+    <string name="profile_summary_title">"Active profile summary"</string>
+    <string name="work_summary">"Contacts, favorites and business numbers can reach you."</string>
+    <string name="home_summary">"Only your contacts and favorites can reach you."</string>
+    <string name="vacation_no_date">"Favorites only · No return date set."</string>
+    <string name="reported_title">"Reported numbers"</string>
+    <string name="reported_summary">"Community data · Dynamic expiration"</string>
+    <string name="reported_loading">"Loading…"</string>
+    <string name="reported_empty">"No reported numbers"</string>
+    <string name="reported_empty_summary">"The community has not reported any numbers yet"</string>
+    <string name="reported_short">"reports"</string>
+    <string name="expires_today">"Expires today"</string>
+    <string name="allow_added">"✅ Number added to the allowlist"</string>
+    <string name="allow_enter">"Enter a number"</string>
+    <string name="allow_short">"Number is too short"</string>
+    <string name="allow_duplicate">"Already on the allowlist"</string>
+    <string name="allow_title">"Allowlist"</string>
+    <string name="allow_manual">"Add a number manually"</string>
+    <string name="allow_example">"E.g. +33612345678"</string>
+    <string name="allow_contacts_tip">"You can also use the 🛡 icon in the Contacts tab"</string>
+    <string name="allow_empty">"Allowlist is empty"</string>
+    <string name="allow_empty_summary">"Numbers added here will never be\nblocked by PhoneZen"</string>
+    <string name="allow_remove_title">"Remove from the allowlist?"</string>
+    <string name="allow_remove">"Remove"</string>
+    <string name="night_hours">"Strict blocking from %1$s:00 to %2$s:00"</string>
+    <string name="active_profile_format">"%1$s active"</string>
+    <string name="vacation_return_format">"Favorites only · Return on %1$s → %2$s"</string>
+    <string name="allow_remove_message">"%1$s may be blocked again."</string>
+    <string name="expires_date">"Expires on %1$s"</string>
+    <string name="expiration_total">"Total duration: %1$s · %2$s"</string>
+    <string name="profile_work_subtitle">"Contacts + allowlist + French business numbers (08/09)"</string>
+    <string name="profile_home_subtitle">"Contacts + allowlist only"</string>
+    <string name="profile_vacation_subtitle">"Favorites + allowlist · scheduled automatic return"</string>
+    <string name="reported_unwanted">"Unwanted"</string>
+    <plurals name="protected_numbers">
+        <item quantity="one">"%1$d protected number"</item>
+        <item quantity="other">"%1$d protected numbers"</item>
+    </plurals>
+    <plurals name="reported_numbers">
+        <item quantity="one">"%1$d number reported by the community"</item>
+        <item quantity="other">"%1$d numbers reported by the community"</item>
+    </plurals>
+    <plurals name="remaining_days">
+        <item quantity="one">"%1$d day remaining"</item>
+        <item quantity="other">"%1$d days remaining"</item>
+    </plurals>
+    <plurals name="duration_days">
+        <item quantity="one">"%1$d day"</item>
+        <item quantity="other">"%1$d days"</item>
+    </plurals>
+    <plurals name="report_count">
+        <item quantity="one">"%1$d report"</item>
+        <item quantity="other">"%1$d reports"</item>
+    </plurals>
+</resources>

@@ -52,6 +52,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _contacts = MutableStateFlow<List<Contact>>(emptyList())
     val contacts: StateFlow<List<Contact>> = _contacts
+    private data class DialpadEntry(val contact: Contact, val numbers: List<String>)
+    @Volatile private var dialpadIndex: List<DialpadEntry> = emptyList()
 
     private val _favorites = MutableStateFlow<List<Contact>>(emptyList())
     val favorites: StateFlow<List<Contact>> = _favorites
@@ -134,6 +136,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     )
     val callPopupMode: StateFlow<CallPopupMode> = _callPopupMode.asStateFlow()
 
+    private val _settingsRevision = MutableStateFlow(0)
+    val settingsRevision: StateFlow<Int> = _settingsRevision.asStateFlow()
+
     // ─── PROFILS ──────────────────────────────────────────────────────
     private val _activeProfile = MutableStateFlow(profileManager.getActiveProfile())
     val activeProfile: StateFlow<BlockingProfile> = _activeProfile
@@ -163,6 +168,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val dialpadNumber: StateFlow<String> = _dialpadNumber
 
     private var isLoadingData = false
+    private var reloadRequested = false
 
     // ─── BROADCAST RECEIVER ───────────────────────────────────────────
     private val globalUpdateReceiver = object : BroadcastReceiver() {
@@ -188,7 +194,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
         viewModelScope.launch {
             db.callNoteDao().getAllNotes().collectLatest {
-                _notes.value = it.associate { note -> note.number to note.note }
+                _notes.value = it.sortedBy { note -> note.timestamp }.associate { note ->
+                    (fr.bonobo.phonezen.utils.InternationalNumbers.e164(note.number, "FR") ?: note.number) to note.note
+                }
             }
         }
         val filter = IntentFilter().apply {
@@ -217,8 +225,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 val favIds       = getFavoriteIds()
                 val groups       = PhoneUtils.loadCallGroups(ctx, favIds)
                 val contactsList = PhoneUtils.loadContacts(ctx, favIds)
+                val region = PhoneUtils.regionProvider()
+                val preparedDialpadIndex = contactsList.map { contact ->
+                    DialpadEntry(contact, contact.phoneNumbers.flatMap { number ->
+                        listOfNotNull(
+                            PhoneUtils.normalizeNumber(number, region),
+                            fr.bonobo.phonezen.utils.InternationalNumbers.clean(number),
+                            fr.bonobo.phonezen.utils.InternationalNumbers.frenchLocal(number, region)
+                        ).distinct()
+                    })
+                }
                 withContext(Dispatchers.Main) {
                     _callGroups.value  = groups
+                    dialpadIndex       = preparedDialpadIndex
                     _contacts.value    = contactsList
                     _favorites.value   = contactsList
                         .filter { it.isFavorite }
@@ -229,12 +248,50 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) { _isLoading.value = false }
             } finally {
-                isLoadingData = false
+                withContext(Dispatchers.Main) {
+                    isLoadingData = false
+                    if (reloadRequested) {
+                        reloadRequested = false
+                        loadData(ctx)
+                    }
+                }
             }
         }
     }
 
-    fun forceReload(ctx: Context) = loadData(ctx)
+    fun forceReload(ctx: Context) {
+        if (isLoadingData) reloadRequested = true else loadData(ctx)
+    }
+
+    fun reloadAfterRestore(ctx: Context) {
+        _blockPrivate.value = spamDetector.isBlockPrivateEnabled()
+        _hideBlocked.value = prefs.getBoolean("hide_blocked", true)
+        _doNotDisturb.value = spamDetector.isDoNotDisturbEnabled()
+        _whitelist.value = spamDetector.getWhitelist()
+        _scheduleEnabled.value = spamDetector.isScheduleEnabled()
+        _scheduleStartHour.value = spamDetector.getScheduleStartHour()
+        _scheduleStartMinute.value = spamDetector.getScheduleStartMinute()
+        _scheduleEndHour.value = spamDetector.getScheduleEndHour()
+        _scheduleEndMinute.value = spamDetector.getScheduleEndMinute()
+        _communityBlockEnabled.value = spamDetector.isCommunityBlockEnabled()
+        _hospitalWhitelistEnabled.value = prefs.getBoolean(PREF_HOSPITAL_WHITELIST, true)
+        _callPopupMode.value = CallPopupMode.entries.firstOrNull {
+            it.name == prefs.getString(PREF_POPUP_MODE, CallPopupMode.FULLSCREEN.name)
+        } ?: CallPopupMode.FULLSCREEN
+        _activeProfile.value = profileManager.getActiveProfile()
+        _vacationConfig.value = profileManager.getVacationConfig()
+        _workDndEnabled.value = profileManager.isDndEnabled(BlockingProfile.WORK)
+        _workDndStart.value = profileManager.getDndStart(BlockingProfile.WORK)
+        _workDndEnd.value = profileManager.getDndEnd(BlockingProfile.WORK)
+        _homeDndEnabled.value = profileManager.isDndEnabled(BlockingProfile.HOME)
+        _homeDndStart.value = profileManager.getDndStart(BlockingProfile.HOME)
+        _homeDndEnd.value = profileManager.getDndEnd(BlockingProfile.HOME)
+        _hasNewVoicemail.value = prefs.getBoolean("has_voicemail", false)
+        fr.bonobo.phonezen.utils.ContactCache.clear()
+        fr.bonobo.phonezen.utils.ContactResolver.clear()
+        _settingsRevision.value++
+        forceReload(ctx)
+    }
 
     // ─── RECHERCHE & CLAVIER ──────────────────────────────────────────
     fun setSearchQuery(q: String) { _searchQuery.value = q }
@@ -244,9 +301,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun getSuggestions(input: String): List<Contact> {
         if (input.length < 3) return emptyList()
         val normalized = normalize(input)
-        return _contacts.value.filter { c ->
-            getContactNumbers(c).any { it.contains(normalized) }
-        }.take(3)
+        return dialpadIndex.asSequence()
+            .filter { entry -> entry.numbers.any { it.contains(normalized) } }
+            .take(3)
+            .map { it.contact }
+            .toList()
     }
 
     fun findContactsByName(name: String): List<Contact> {
@@ -257,9 +316,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     // ─── LISTE NOIRE ──────────────────────────────────────────────────
     fun blockNumber(rawNumber: String, label: String = "") {
+        val number = requireInternationalNumber(rawNumber) ?: return
         viewModelScope.launch(Dispatchers.IO) {
             db.blockedNumberDao().insert(
-                BlockedNumber(number = normalize(rawNumber), label = label)
+                BlockedNumber(number = number, label = label)
             )
         }
     }
@@ -269,13 +329,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     suspend fun isNumberBlocked(rawNumber: String): Boolean {
-        val normalized = normalize(rawNumber)
-        val alt = if (normalized.startsWith("+33")) "0" + normalized.substring(3)
-        else if (normalized.startsWith("0")) "+33" + normalized.substring(1)
-        else null
         return withContext(Dispatchers.IO) {
-            db.blockedNumberDao().isBlocked(normalized) > 0 ||
-                    (alt != null && db.blockedNumberDao().isBlocked(alt) > 0)
+            db.blockedNumberDao().getAllOnce().any {
+                fr.bonobo.phonezen.utils.InternationalNumbers.matchesStored(rawNumber, it.number, PhoneUtils.regionProvider())
+            }
         }
     }
 
@@ -285,11 +342,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun removeCallGroup(number: String) {
+        val ids = _callGroups.value.filter { it.number == number }.flatMap { it.calls }.map { it.id }
+        if (ids.isEmpty()) return
         viewModelScope.launch(Dispatchers.IO) {
             getApplication<Application>().contentResolver.delete(
                 CallLog.Calls.CONTENT_URI,
-                "${CallLog.Calls.NUMBER} = ?",
-                arrayOf(number)
+                "${CallLog.Calls._ID} IN (${ids.joinToString(",") { "?" }})",
+                ids.map { it.toString() }.toTypedArray()
             )
             withContext(Dispatchers.Main) {
                 _callGroups.value = _callGroups.value.filter { it.number != number }
@@ -299,8 +358,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     // ─── SIGNALEMENT ──────────────────────────────────────────────────
     fun reportNumber(number: String, tag: String = "indésirable") {
+        val normalized = requireInternationalNumber(number) ?: return
         viewModelScope.launch {
-            val normalized = normalize(number)
             withContext(Dispatchers.IO) {
                 db.blockedNumberDao().insert(
                     BlockedNumber(number = normalized, label = "Signalé: $tag")
@@ -336,6 +395,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     // ─── FAVORIS & NOTES ──────────────────────────────────────────────
     fun toggleFavorite(number: String) {
+        if (requireInternationalNumber(number) == null) return
         viewModelScope.launch {
             val key    = PhoneUtils.groupKey(number)
             val favIds = getFavoriteIds().toMutableSet()
@@ -354,8 +414,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun saveNote(number: String, note: String) {
-        val n = normalize(number)
+        val n = requireInternationalNumber(number) ?: return
         viewModelScope.launch(Dispatchers.IO) {
+            val legacy = fr.bonobo.phonezen.utils.InternationalNumbers.frenchLocal(n, null)
+            if (legacy != null) db.callNoteDao().deleteNote(legacy)
             if (note.isBlank()) db.callNoteDao().deleteNote(n)
             else db.callNoteDao().upsert(CallNote(n, note.trim()))
         }
@@ -363,7 +425,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     // ─── WHITELIST UTILISATEUR ────────────────────────────────────────
     fun refreshWhitelist()                  { _whitelist.value = spamDetector.getWhitelist() }
-    fun addToWhitelist(number: String)      { spamDetector.addToWhitelist(normalize(number)); refreshWhitelist() }
+    fun addToWhitelist(number: String)      { requireInternationalNumber(number)?.let { spamDetector.addToWhitelist(it) }; refreshWhitelist() }
     fun removeFromWhitelist(number: String) { spamDetector.removeFromWhitelist(normalize(number)); refreshWhitelist() }
     fun isWhitelisted(number: String)       = spamDetector.isWhitelisted(normalize(number))
     fun buildNumberToNameMap(): Map<String, String> =
@@ -422,8 +484,18 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     // ─── UTILS PRIVÉS ─────────────────────────────────────────────────
     private fun normalize(number: String?) = PhoneUtils.normalizeNumber(number ?: "")
+
+    private fun requireInternationalNumber(number: String): String? {
+        val result = fr.bonobo.phonezen.utils.InternationalNumbers.e164(number, PhoneUtils.regionProvider())
+        if (result == null) android.widget.Toast.makeText(getApplication(),
+            getApplication<Application>().getString(fr.bonobo.phonezen.R.string.country_number_needed),
+            android.widget.Toast.LENGTH_LONG).show()
+        return result
+    }
     private fun getContactNumbers(contact: Contact): List<String> =
-        contact.phoneNumbers.map { normalize(it) }
+        contact.phoneNumbers.flatMap { listOfNotNull(
+            normalize(it), fr.bonobo.phonezen.utils.InternationalNumbers.clean(it),
+            fr.bonobo.phonezen.utils.InternationalNumbers.frenchLocal(it, PhoneUtils.regionProvider())) }
     private fun getFavoriteIds(): Set<String> =
         prefs.getStringSet("favorites", emptySet()) ?: emptySet()
 
@@ -442,7 +514,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         val reported = reportRepo.checkNumber(num)
                         if (reported != null && reported.isSuspect()) {
                             map[num] = reported
-                            if (reported.reports >= 5) communityBlock.add(num)
+                            if (reported.reports >= SpamDetector.COMMUNITY_BLOCK_THRESHOLD) communityBlock.add(num)
                         }
                     } catch (e: Exception) {
                         Log.e("MainViewModel", "Erreur vérification $num", e)

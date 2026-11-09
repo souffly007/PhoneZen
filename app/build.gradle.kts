@@ -11,13 +11,14 @@ plugins {
 android {
     namespace = "fr.bonobo.phonezen"
     compileSdk = 35
+    buildToolsVersion = "35.0.0"
 
     defaultConfig {
         applicationId = "fr.bonobo.phonezen"
         minSdk = 24
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.4e"
+        versionCode = 10
+        versionName = "1.5-international-beta8"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -35,6 +36,12 @@ android {
     // ✅ FLAVORS : on isole Google Play Services
     flavorDimensions += "distribution"
     productFlavors {
+        create("preview") {
+            dimension = "distribution"
+            applicationIdSuffix = ".test"
+            versionNameSuffix = "-test"
+            resValue("string", "app_name", "PhoneZen Test")
+        }
         create("fdroid") {
             dimension = "distribution"
             // Pas de Google Play Services ici
@@ -65,6 +72,7 @@ android {
     }
 
     compileOptions {
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
@@ -79,6 +87,10 @@ android {
 }
 
 dependencies {
+    // Offline international numbering metadata (no Google Play Services).
+    implementation("com.googlecode.libphonenumber:libphonenumber:9.0.39")
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
+    testImplementation("junit:junit:4.13.2")
     // ── Ktor (client HTTP pour Supabase) ──
     implementation("io.ktor:ktor-client-android:2.3.7")
     implementation("io.ktor:ktor-client-content-negotiation:2.3.7")
@@ -91,8 +103,9 @@ dependencies {
     // Core
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("androidx.core:core-ktx:1.13.1")
-    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
-    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.2")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.2")
+
     implementation("androidx.activity:activity-compose:1.8.2")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.2")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
@@ -115,10 +128,10 @@ dependencies {
 
     // Coroutines / WorkManager
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
-    implementation("androidx.work:work-runtime-ktx:2.9.0")
+
     implementation("androidx.work:work-runtime-ktx:2.9.1")
-    implementation("androidx.compose.foundation:foundation:1.10.5")
-    implementation("androidx.compose.material3:material3:1.4.0")
+    implementation("androidx.compose.foundation:foundation")
+
     implementation("androidx.graphics:graphics-path:1.1.0-rc01")
 
     // Coil

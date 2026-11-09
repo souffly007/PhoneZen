@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="selected_calls">
+        <item quantity="one">"%1$d seçili"</item>
+        <item quantity="other">"%1$d seçili"</item>
+    </plurals>
+    <plurals name="load_remaining">
+        <item quantity="one">"Kalan %1$d öğeyi yükle"</item>
+        <item quantity="other">"Kalan %1$d öğeyi yükle"</item>
+    </plurals>
+    <plurals name="more_calls">
+        <item quantity="one">"… ve %1$d tane daha"</item>
+        <item quantity="other">"… ve %1$d tane daha"</item>
+    </plurals>
+    <plurals name="crash_reports">
+        <item quantity="one">"%1$d rapor mevcut"</item>
+        <item quantity="other">"%1$d rapor mevcut"</item>
+    </plurals>
+    <plurals name="protected_numbers">
+        <item quantity="one">"%1$d korunan numara"</item>
+        <item quantity="other">"%1$d korunan numara"</item>
+    </plurals>
+    <plurals name="reported_numbers">
+        <item quantity="one">"Topluluk tarafından bildirilen %1$d numara"</item>
+        <item quantity="other">"Topluluk tarafından bildirilen %1$d numara"</item>
+    </plurals>
+    <plurals name="remaining_days">
+        <item quantity="one">"%1$d gün kaldı"</item>
+        <item quantity="other">"%1$d gün kaldı"</item>
+    </plurals>
+    <plurals name="duration_days">
+        <item quantity="one">"%1$d gün"</item>
+        <item quantity="other">"%1$d gün"</item>
+    </plurals>
+    <plurals name="report_count">
+        <item quantity="one">"%1$d bildirim"</item>
+        <item quantity="other">"%1$d bildirim"</item>
+    </plurals>
+</resources>
+

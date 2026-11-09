@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="profiles_title">"Profils de blocage"</string>
+    <string name="profiles_explain1">"Le profil actif remplace les autres règles de blocage. "</string>
+    <string name="profiles_explain2">"La liste blanche reste toujours prioritaire."</string>
+    <string name="profiles_allowed">"✅ Autorisés"</string>
+    <string name="profiles_blocked">"🚫 Bloqués"</string>
+    <string name="profiles_ideal">"💡 Idéal pour"</string>
+    <string name="work_details">"Contacts, favoris, numéros 08/09 non-surtaxés"</string>
+    <string name="work_blocked">"Démarchage ARCEP, signalements communautaires, masqués"</string>
+    <string name="work_ideal">"Heures de bureau, attente de rappels professionnels"</string>
+    <string name="home_details">"Contacts et favoris uniquement"</string>
+    <string name="home_blocked">"Tout le reste (inconnus, démarchage, pro...)"</string>
+    <string name="home_ideal">"Soirées et week-ends à la maison"</string>
+    <string name="vacation_details">"Favoris et liste blanche uniquement"</string>
+    <string name="vacation_blocked">"Tout le reste, y compris contacts non-favoris"</string>
+    <string name="vacation_ideal">"Vacances, week-ends prolongés, repos total"</string>
+    <string name="night_dnd">"Ne pas déranger la nuit"</string>
+    <string name="night_summary">"Silence total programmé"</string>
+    <string name="night_start">"DÉBUT"</string>
+    <string name="night_end">"FIN"</string>
+    <string name="profile_active_badge">"ACTIF"</string>
+    <string name="vacation_options">"⚙️ Options vacances"</string>
+    <string name="return_date">"Date de retour automatique"</string>
+    <string name="manual_disable">"Désactivation manuelle"</string>
+    <string name="change_date">"Modifier"</string>
+    <string name="set_date">"Définir"</string>
+    <string name="return_profile">"Profil à la fin des vacances"</string>
+    <string name="return_summary">"Basculera automatiquement le jour du retour"</string>
+    <string name="submenu_cancel">"Annuler"</string>
+    <string name="profile_summary_title">"Résumé du profil actif"</string>
+    <string name="work_summary">"Contacts, favoris et numéros pro passent librement."</string>
+    <string name="home_summary">"Seuls vos contacts et favoris peuvent vous joindre."</string>
+    <string name="vacation_no_date">"Favoris uniquement · Aucune date de retour définie."</string>
+    <string name="reported_title">"Numéros signalés"</string>
+    <string name="reported_summary">"Données communautaires · Expiration dynamique"</string>
+    <string name="reported_loading">"Chargement…"</string>
+    <string name="reported_empty">"Aucun numéro signalé"</string>
+    <string name="reported_empty_summary">"La communauté n\'a rien signalé pour l\'instant"</string>
+    <string name="reported_short">"signal."</string>
+    <string name="expires_today">"Expire aujourd\'hui"</string>
+    <string name="allow_added">"✅ Numéro ajouté à la liste blanche"</string>
+    <string name="allow_enter">"Entrez un numéro"</string>
+    <string name="allow_short">"Numéro trop court"</string>
+    <string name="allow_duplicate">"Déjà dans la liste blanche"</string>
+    <string name="allow_title">"Liste blanche"</string>
+    <string name="allow_manual">"Ajouter un numéro manuellement"</string>
+    <string name="allow_example">"Ex: 0612345678"</string>
+    <string name="allow_contacts_tip">"Vous pouvez aussi utiliser l\'icône 🛡 depuis l\'onglet Contacts"</string>
+    <string name="allow_empty">"Liste blanche vide"</string>
+    <string name="allow_empty_summary">"Les numéros ajoutés ici ne seront\njamais bloqués par PhoneZen"</string>
+    <string name="allow_remove_title">"Retirer de la liste blanche ?"</string>
+    <string name="allow_remove">"Retirer"</string>
+    <string name="night_hours">"Blocage strict de %1$sh à %2$sh"</string>
+    <string name="active_profile_format">"%1$s actif"</string>
+    <string name="vacation_return_format">"Favoris uniquement · Retour le %1$s → %2$s"</string>
+    <string name="allow_remove_message">"%1$s pourra à nouveau être bloqué."</string>
+    <string name="expires_date">"Expire le %1$s"</string>
+    <string name="expiration_total">"Durée totale : %1$s · %2$s"</string>
+    <string name="profile_work_subtitle">"Contacts + liste blanche + numéros pro (08/09)"</string>
+    <string name="profile_home_subtitle">"Contacts + liste blanche uniquement"</string>
+    <string name="profile_vacation_subtitle">"Favoris + liste blanche · retour auto programmable"</string>
+    <string name="reported_unwanted">"Indésirable"</string>
+    <plurals name="protected_numbers">
+        <item quantity="one">"%1$d numéro protégé"</item>
+        <item quantity="other">"%1$d numéros protégés"</item>
+    </plurals>
+    <plurals name="reported_numbers">
+        <item quantity="one">"%1$d numéro signalé par la communauté"</item>
+        <item quantity="other">"%1$d numéros signalés par la communauté"</item>
+    </plurals>
+    <plurals name="remaining_days">
+        <item quantity="one">"%1$d jour restant"</item>
+        <item quantity="other">"%1$d jours restants"</item>
+    </plurals>
+    <plurals name="duration_days">
+        <item quantity="one">"%1$d jour"</item>
+        <item quantity="other">"%1$d jours"</item>
+    </plurals>
+    <plurals name="report_count">
+        <item quantity="one">"%1$d signalement"</item>
+        <item quantity="other">"%1$d signalements"</item>
+    </plurals>
+</resources>

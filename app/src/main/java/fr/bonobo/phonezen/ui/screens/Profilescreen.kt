@@ -3,6 +3,9 @@
 // This file is part of PhoneZen.
 package fr.bonobo.phonezen.ui.screens
 
+import fr.bonobo.phonezen.R
+import androidx.compose.ui.platform.LocalContext
+
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -34,6 +37,7 @@ import java.util.*
 @Composable
 fun ProfileScreen(vm: MainViewModel, onBack: () -> Unit = {}) {
     val c             = LocalColors.current
+    val strings = LocalContext.current.resources
     val activeProfile by vm.activeProfile.collectAsState()
     val vacationConfig by vm.vacationConfig.collectAsState()
 
@@ -60,7 +64,7 @@ fun ProfileScreen(vm: MainViewModel, onBack: () -> Unit = {}) {
                 Icon(Icons.Default.ArrowBack, null, tint = c.neonCyan)
             }
             Text(
-                text       = "Profils de blocage",
+                text       = strings.getString(R.string.profiles_title),
                 fontSize   = 22.sp,
                 fontWeight = FontWeight.Bold,
                 color      = c.neonCyan,
@@ -82,8 +86,8 @@ fun ProfileScreen(vm: MainViewModel, onBack: () -> Unit = {}) {
                 Icon(Icons.Default.Info, null, tint = c.neonCyan, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    "Le profil actif remplace les autres règles de blocage. " +
-                            "La liste blanche reste toujours prioritaire.",
+                    strings.getString(R.string.profiles_explain1) +
+                            strings.getString(R.string.profiles_explain2),
                     fontSize = 12.sp,
                     color    = c.neonCyan
                 )
@@ -97,9 +101,9 @@ fun ProfileScreen(vm: MainViewModel, onBack: () -> Unit = {}) {
             isActive = activeProfile == BlockingProfile.WORK,
             onSelect = { vm.setActiveProfile(BlockingProfile.WORK) }
         ) {
-            ProfileDetail("✅ Autorisés",  "Contacts, favoris, numéros 08/09 non-surtaxés")
-            ProfileDetail("🚫 Bloqués",    "Démarchage ARCEP, signalements communautaires, masqués")
-            ProfileDetail("💡 Idéal pour", "Heures de bureau, attente de rappels professionnels")
+            ProfileDetail(strings.getString(R.string.profiles_allowed),  strings.getString(R.string.work_details))
+            ProfileDetail(strings.getString(R.string.profiles_blocked),    strings.getString(R.string.work_blocked))
+            ProfileDetail(strings.getString(R.string.profiles_ideal), strings.getString(R.string.work_ideal))
 
             DndNightSection(
                 enabled   = workDndEnabled,
@@ -118,9 +122,9 @@ fun ProfileScreen(vm: MainViewModel, onBack: () -> Unit = {}) {
             isActive = activeProfile == BlockingProfile.HOME,
             onSelect = { vm.setActiveProfile(BlockingProfile.HOME) }
         ) {
-            ProfileDetail("✅ Autorisés",  "Contacts et favoris uniquement")
-            ProfileDetail("🚫 Bloqués",    "Tout le reste (inconnus, démarchage, pro...)")
-            ProfileDetail("💡 Idéal pour", "Soirées et week-ends à la maison")
+            ProfileDetail(strings.getString(R.string.profiles_allowed),  strings.getString(R.string.home_details))
+            ProfileDetail(strings.getString(R.string.profiles_blocked),    strings.getString(R.string.home_blocked))
+            ProfileDetail(strings.getString(R.string.profiles_ideal), strings.getString(R.string.home_ideal))
 
             DndNightSection(
                 enabled   = homeDndEnabled,
@@ -139,9 +143,9 @@ fun ProfileScreen(vm: MainViewModel, onBack: () -> Unit = {}) {
             isActive = activeProfile == BlockingProfile.VACATION,
             onSelect = { vm.setActiveProfile(BlockingProfile.VACATION) }
         ) {
-            ProfileDetail("✅ Autorisés",  "Favoris et liste blanche uniquement")
-            ProfileDetail("🚫 Bloqués",    "Tout le reste, y compris contacts non-favoris")
-            ProfileDetail("💡 Idéal pour", "Vacances, week-ends prolongés, repos total")
+            ProfileDetail(strings.getString(R.string.profiles_allowed),  strings.getString(R.string.vacation_details))
+            ProfileDetail(strings.getString(R.string.profiles_blocked),    strings.getString(R.string.vacation_blocked))
+            ProfileDetail(strings.getString(R.string.profiles_ideal), strings.getString(R.string.vacation_ideal))
 
             AnimatedVisibility(visible = activeProfile == BlockingProfile.VACATION) {
                 VacationConfigSection(
@@ -168,6 +172,7 @@ private fun DndNightSection(
     onPlus    : (String) -> Unit
 ) {
     val c = LocalColors.current
+    val strings = LocalContext.current.resources
 
     Column(modifier = Modifier.padding(top = 8.dp)) {
         HorizontalDivider(
@@ -185,12 +190,12 @@ private fun DndNightSection(
                 Spacer(Modifier.width(10.dp))
                 Column {
                     Text(
-                        "Ne pas déranger la nuit",
+                        strings.getString(R.string.night_dnd),
                         fontSize   = 14.sp,
                         fontWeight = FontWeight.Medium,
                         color      = c.textPrimary
                     )
-                    Text("Silence total programmé", fontSize = 11.sp, color = c.textSecond)
+                    Text(strings.getString(R.string.night_summary), fontSize = 11.sp, color = c.textSecond)
                 }
             }
             Switch(
@@ -228,7 +233,7 @@ private fun DndNightSection(
                     ) {
                         CircularLedClock(
                             hour    = startHour,
-                            label   = "DÉBUT",
+                            label   = strings.getString(R.string.night_start),
                             onMinus = { onMinus("start") },
                             onPlus  = { onPlus("start") }
                         )
@@ -240,7 +245,7 @@ private fun DndNightSection(
                         )
                         CircularLedClock(
                             hour    = endHour,
-                            label   = "FIN",
+                            label   = strings.getString(R.string.night_end),
                             onMinus = { onMinus("end") },
                             onPlus  = { onPlus("end") }
                         )
@@ -255,7 +260,7 @@ private fun DndNightSection(
                         Icon(Icons.Default.Warning, null, tint = c.neonOrange, modifier = Modifier.size(14.dp))
                         Spacer(Modifier.width(8.dp))
                         Text(
-                            "Blocage strict de ${startHour}h à ${endHour}h",
+                            strings.getString(R.string.night_hours, startHour.toString().padStart(2, '0'), endHour.toString().padStart(2, '0')),
                             fontSize   = 11.sp,
                             color      = c.neonOrange,
                             fontWeight = FontWeight.Medium
@@ -278,6 +283,7 @@ private fun CircularLedClock(
     onPlus  : () -> Unit
 ) {
     val c = LocalColors.current
+    val strings = LocalContext.current.resources
     val ledColor = c.neonCyan
 
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -357,6 +363,7 @@ private fun ProfileCard(
     content  : @Composable ColumnScope.() -> Unit
 ) {
     val c           = LocalColors.current
+    val strings = LocalContext.current.resources
     val borderColor = if (isActive) c.neonCyan else c.glassStroke
     val bgColor     = if (isActive) c.neonCyan.copy(alpha = 0.06f) else c.surfaceVar
 
@@ -380,13 +387,13 @@ private fun ProfileCard(
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     Text(
-                        text       = profile.label,
+                        text       = profile.localizedLabel(LocalContext.current),
                         fontSize   = 18.sp,
                         fontWeight = FontWeight.Bold,
                         color      = if (isActive) c.neonCyan else c.textPrimary
                     )
                     Text(
-                        text     = profile.subtitle,
+                        text     = profile.localizedSubtitle(LocalContext.current),
                         fontSize = 12.sp,
                         color    = c.textSecond
                     )
@@ -394,7 +401,7 @@ private fun ProfileCard(
                 if (isActive) {
                     Surface(shape = RoundedCornerShape(20.dp), color = c.neonCyan) {
                         Text(
-                            text       = "ACTIF",
+                            text       = strings.getString(R.string.profile_active_badge),
                             fontSize   = 10.sp,
                             color      = c.background,
                             fontWeight = FontWeight.Bold,
@@ -413,6 +420,7 @@ private fun ProfileCard(
 @Composable
 private fun ProfileDetail(label: String, value: String) {
     val c = LocalColors.current
+    val strings = LocalContext.current.resources
     Row(
         modifier          = Modifier.padding(vertical = 3.dp),
         verticalAlignment = Alignment.Top
@@ -436,6 +444,7 @@ private fun VacationConfigSection(
     onClear : () -> Unit
 ) {
     val c = LocalColors.current
+    val strings = LocalContext.current.resources
     var showDatePicker by remember { mutableStateOf(false) }
 
     Column(modifier = Modifier.padding(top = 8.dp)) {
@@ -445,7 +454,7 @@ private fun VacationConfigSection(
         )
 
         Text(
-            "⚙️ Options vacances",
+            strings.getString(R.string.vacation_options),
             fontSize   = 13.sp,
             fontWeight = FontWeight.Bold,
             color      = c.neonCyan,
@@ -465,14 +474,14 @@ private fun VacationConfigSection(
                 Spacer(Modifier.width(10.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        "Date de retour automatique",
+                        strings.getString(R.string.return_date),
                         fontSize   = 13.sp,
                         fontWeight = FontWeight.Medium,
                         color      = c.textPrimary
                     )
                     val dateTxt = if (config.hasEndDate)
-                        SimpleDateFormat("EEE dd MMMM yyyy", Locale.FRANCE).format(Date(config.endTimestamp))
-                    else "Désactivation manuelle"
+                        SimpleDateFormat("EEE dd MMMM yyyy", Locale.getDefault()).format(Date(config.endTimestamp))
+                    else strings.getString(R.string.manual_disable)
                     Text(
                         dateTxt,
                         fontSize = 11.sp,
@@ -486,7 +495,7 @@ private fun VacationConfigSection(
                 }
                 TextButton(onClick = { showDatePicker = true }) {
                     Text(
-                        if (config.hasEndDate) "Modifier" else "Définir",
+                        if (config.hasEndDate) strings.getString(R.string.change_date) else strings.getString(R.string.set_date),
                         color    = c.neonCyan,
                         fontSize = 12.sp
                     )
@@ -512,13 +521,13 @@ private fun VacationConfigSection(
                             Spacer(Modifier.width(10.dp))
                             Column {
                                 Text(
-                                    "Profil à la fin des vacances",
+                                    strings.getString(R.string.return_profile),
                                     fontSize   = 13.sp,
                                     fontWeight = FontWeight.Medium,
                                     color      = c.textPrimary
                                 )
                                 Text(
-                                    "Basculera automatiquement le jour du retour",
+                                    strings.getString(R.string.return_summary),
                                     fontSize = 11.sp,
                                     color    = c.textSecond
                                 )
@@ -547,7 +556,7 @@ private fun VacationConfigSection(
                                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                         Text(profile.emoji, fontSize = 18.sp)
                                         Text(
-                                            profile.label,
+                                            profile.localizedLabel(LocalContext.current),
                                             fontSize   = 11.sp,
                                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                                         )
@@ -581,6 +590,7 @@ private fun VacationDatePickerDialog(
     onDismiss : () -> Unit
 ) {
     val c     = LocalColors.current
+    val strings = LocalContext.current.resources
     val state = rememberDatePickerState(
         initialSelectedDateMillis = if (currentTs > 0) currentTs
         else System.currentTimeMillis() + 7 * 24 * 60 * 60 * 1000L,
@@ -597,7 +607,7 @@ private fun VacationDatePickerDialog(
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Annuler", color = c.textSecond) }
+            TextButton(onClick = onDismiss) { Text(strings.getString(R.string.submenu_cancel), color = c.textSecond) }
         },
         colors = DatePickerDefaults.colors(containerColor = c.surfaceVar)
     ) {
@@ -627,6 +637,7 @@ private fun VacationDatePickerDialog(
 @Composable
 private fun ActiveProfileSummary(profile: BlockingProfile, vacationConfig: VacationConfig) {
     val c = LocalColors.current
+    val strings = LocalContext.current.resources
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -636,7 +647,7 @@ private fun ActiveProfileSummary(profile: BlockingProfile, vacationConfig: Vacat
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
-                "Résumé du profil actif",
+                strings.getString(R.string.profile_summary_title),
                 fontSize   = 13.sp,
                 fontWeight = FontWeight.Bold,
                 color      = c.neonCyan,
@@ -647,21 +658,21 @@ private fun ActiveProfileSummary(profile: BlockingProfile, vacationConfig: Vacat
                 Spacer(Modifier.width(10.dp))
                 Column {
                     Text(
-                        "${profile.label} actif",
+                        strings.getString(R.string.active_profile_format, profile.localizedLabel(LocalContext.current)),
                         fontSize   = 15.sp,
                         fontWeight = FontWeight.Medium,
                         color      = c.textPrimary
                     )
                     val msg = when (profile) {
-                        BlockingProfile.WORK     -> "Contacts, favoris et numéros pro passent librement."
-                        BlockingProfile.HOME     -> "Seuls vos contacts et favoris peuvent vous joindre."
+                        BlockingProfile.WORK     -> strings.getString(R.string.work_summary)
+                        BlockingProfile.HOME     -> strings.getString(R.string.home_summary)
                         BlockingProfile.VACATION -> {
                             if (vacationConfig.hasEndDate && !vacationConfig.isExpired) {
-                                val fmt = SimpleDateFormat("dd/MM/yyyy", Locale.FRANCE)
-                                val returnLabel = vacationConfig.returnProfile.label
-                                "Favoris uniquement · Retour le ${fmt.format(Date(vacationConfig.endTimestamp))} → $returnLabel"
+                                val fmt = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
+                                val returnLabel = vacationConfig.returnProfile.localizedLabel(LocalContext.current)
+                                strings.getString(R.string.vacation_return_format, fmt.format(Date(vacationConfig.endTimestamp)), returnLabel)
                             } else {
-                                "Favoris uniquement · Aucune date de retour définie."
+                                strings.getString(R.string.vacation_no_date)
                             }
                         }
                     }

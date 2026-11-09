@@ -19,6 +19,7 @@ import fr.bonobo.phonezen.blocking.HospitalWhitelistManager
 import fr.bonobo.phonezen.data.local.AppDatabase
 import fr.bonobo.phonezen.data.local.BlockedCall
 import fr.bonobo.phonezen.data.repository.HealthcareRepository
+import fr.bonobo.phonezen.utils.CountryRulesManager
 import fr.bonobo.phonezen.utils.PhoneUtils
 import fr.bonobo.phonezen.utils.SpamDetector
 import kotlinx.coroutines.CoroutineScope
@@ -26,6 +27,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import java.util.LinkedHashMap
 
 class PhoneZenCallScreeningService : CallScreeningService() {
 
@@ -33,6 +35,14 @@ class PhoneZenCallScreeningService : CallScreeningService() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private lateinit var detector: SpamDetector
     private lateinit var hospitalWhitelistManager: HospitalWhitelistManager
+    
+    // Cache pour les résultats récents (5 dernières minutes) - max 100 entrées
+    private val analysisCache = object : LinkedHashMap<String, Pair<fr.bonobo.phonezen.data.model.SpamResult, Long>>(100, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Pair<fr.bonobo.phonezen.data.model.SpamResult, Long>>): Boolean {
+            return size > 100 || (System.currentTimeMillis() - eldest.value.second > CACHE_EXPIRY_MS)
+        }
+    }
+    private val cacheLock = Any()
 
     companion object {
         const val CHANNEL_ID      = "phonezen_blocked"
@@ -42,15 +52,15 @@ class PhoneZenCallScreeningService : CallScreeningService() {
         const val EXTRA_NUMBER    = "extra_number"
         private const val PREF_FILE               = "phonezen_prefs"
         private const val PREF_HOSPITAL_WHITELIST = "hospital_whitelist_enabled"
+        private const val ANALYSIS_TIMEOUT_MS      = 5000L  // Augmenté de 3500 à 5000
+        private const val CACHE_EXPIRY_MS         = 5 * 60 * 1000L  // 5 minutes
     }
 
     override fun onCreate() {
         super.onCreate()
         detector = SpamDetector(applicationContext)
         val db   = AppDatabase.getDatabase(applicationContext)
-        hospitalWhitelistManager = HospitalWhitelistManager(
-            HealthcareRepository(applicationContext, db.healthcareWhitelistDao())
-        )
+        hospitalWhitelistManager = (application as fr.bonobo.phonezen.PhoneZenApp).hospitalWhitelistManager
         createNotificationChannel()
     }
 
@@ -58,6 +68,29 @@ class PhoneZenCallScreeningService : CallScreeningService() {
         applicationContext
             .getSharedPreferences(PREF_FILE, Context.MODE_PRIVATE)
             .getBoolean(PREF_HOSPITAL_WHITELIST, true)
+    
+    /**
+     * Récupère un résultat depuis le cache si valide
+     */
+    private fun getCachedResult(key: String): fr.bonobo.phonezen.data.model.SpamResult? {
+        synchronized(cacheLock) {
+            val cached = analysisCache[key] ?: return null
+            if (System.currentTimeMillis() - cached.second < CACHE_EXPIRY_MS) {
+                return cached.first
+            }
+            analysisCache.remove(key)
+            return null
+        }
+    }
+    
+    /**
+     * Met en cache un résultat
+     */
+    private fun cacheResult(key: String, result: fr.bonobo.phonezen.data.model.SpamResult) {
+        synchronized(cacheLock) {
+            analysisCache[key] = Pair(result, System.currentTimeMillis())
+        }
+    }
 
     private fun handleDrivingModeReply(number: String) {
         val manager = DrivingModeManager(applicationContext)
@@ -77,81 +110,106 @@ class PhoneZenCallScreeningService : CallScreeningService() {
 
     override fun onScreenCall(callDetails: Call.Details) {
 
-        val earlyNumber = callDetails.handle?.schemeSpecificPart ?: ""
-        if (earlyNumber.isNotBlank()
-            && isHospitalWhitelistEnabled()
-            && hospitalWhitelistManager.isHospitalNumber(earlyNumber)
-        ) {
-            val name = hospitalWhitelistManager.getHospitalName(earlyNumber)
-                ?: "Établissement de santé"
-            Log.i(TAG, "🏥 Appel hôpital autorisé : $earlyNumber → $name")
-            respondToCall(callDetails, CallResponse.Builder().build())
-            return
-        }
-
-        if (callDetails.callDirection == Call.Details.DIRECTION_OUTGOING) {
-            respondToCall(callDetails, CallResponse.Builder().build())
-            return
-        }
-
-        val rawNumber = earlyNumber
-
-        serviceScope.launch {
-
-            val contactName = withTimeoutOrNull(1500L) {
-                PhoneUtils.lookupContactName(applicationContext, rawNumber)
-            }
-            if (contactName != null) {
-                Log.d(TAG, "Autorisé (contact) : $rawNumber → $contactName")
-                respondToCall(callDetails, CallResponse.Builder().build())
-                return@launch
-            }
-
-            val normalized = PhoneUtils.normalizeNumber(rawNumber)
-            val alt = when {
-                normalized.startsWith("+33") -> "0" + normalized.substring(3)
-                normalized.startsWith("0")   -> "+33" + normalized.substring(1)
-                else                         -> null
-            }
-            val db = AppDatabase.getDatabase(applicationContext)
-            val isManuallyBlocked =
-                db.blockedNumberDao().isBlocked(normalized) > 0 ||
-                        (alt != null && db.blockedNumberDao().isBlocked(alt) > 0)
-
-            if (isManuallyBlocked) {
-                Log.w(TAG, "BLOCAGE LISTE NOIRE MANUELLE : $rawNumber")
-                blockCall(callDetails, rawNumber, "Bloqué manuellement", "MANUAL", true)
-                return@launch
-            }
-
-            if (detector.isCommunityBlocked(rawNumber)) {
-                Log.w(TAG, "BLOCAGE COMMUNAUTAIRE : $rawNumber")
-                blockCall(
-                    callDetails, rawNumber,
-                    "Signalé par la communauté (≥ ${SpamDetector.COMMUNITY_BLOCK_THRESHOLD} signalements)",
-                    "COMMUNITY", true
-                )
-                return@launch
-            }
-
-            val result = detector.analyze(
-                rawNumber  = rawNumber,
-                isContact  = false,
-                isFavorite = false
-            )
-
-            if (result.isSpam) {
-                Log.w(TAG, "BLOCAGE ARCEP : $rawNumber (${result.reason})")
-                blockCall(
-                    callDetails, rawNumber,
-                    result.reason.ifBlank { "Démarchage détecté" },
-                    result.riskLevel.name, true
-                )
+        if (Build.VERSION.SDK_INT >= 29 && callDetails.callDirection == Call.Details.DIRECTION_OUTGOING) return
+        val rawNumber = callDetails.handle?.schemeSpecificPart.orEmpty()
+        val region = fr.bonobo.phonezen.utils.CountrySettings(applicationContext).forAccount(callDetails.accountHandle)
+        val normalized = PhoneUtils.normalizeNumber(rawNumber, region)
+        val cacheKey = "$region:$normalized"
+        
+        // Vérifier le cache d'abord
+        val cachedResult = getCachedResult(cacheKey)
+        if (cachedResult != null) {
+            Log.d(TAG, "Résultat depuis cache pour $cacheKey")
+            if (cachedResult.isSpam) {
+                blockCall(callDetails, rawNumber, cachedResult.reason, cachedResult.riskLevel.name, false)
             } else {
-                Log.d(TAG, "Autorisé : $rawNumber")
+                respondToCall(callDetails, CallResponse.Builder().build())
+            }
+            return
+        }
+        
+        val responded = java.util.concurrent.atomic.AtomicBoolean(false)
+        val handler = android.os.Handler(android.os.Looper.getMainLooper())
+        val deadline = Runnable {
+            if (responded.compareAndSet(false, true)) {
+                Log.w(TAG, "Timeout atteint pour $rawNumber, autorisation par défaut")
                 respondToCall(callDetails, CallResponse.Builder().build())
             }
         }
+        handler.postDelayed(deadline, ANALYSIS_TIMEOUT_MS)
+        
+        serviceScope.launch {
+            val result = try {
+                withTimeoutOrNull(ANALYSIS_TIMEOUT_MS) {
+                    val countryCode = region?.take(2)?.uppercase() ?: "FR"
+                    val countryRules = CountryRulesManager.loadRules(countryCode, applicationContext)
+                    
+                    // Vérifier les urgences par pays EN PREMIER (priorité absolue)
+                    if (countryRules.isEmergency(rawNumber)) {
+                        return@withTimeoutOrNull fr.bonobo.phonezen.data.model.SpamResult(
+                            false, 
+                            reason = "Numéro d'urgence ($countryCode)"
+                        )
+                    }
+                    
+                    // Vérifier les urgences legacy (compatibilité)
+                    if (fr.bonobo.phonezen.utils.InternationalNumbers.isEmergency(rawNumber, region)) {
+                        return@withTimeoutOrNull fr.bonobo.phonezen.data.model.SpamResult(false, reason = "Numéro d'urgence")
+                    }
+                    
+                    // Vérifier la liste blanche
+                    if (detector.isWhitelisted(rawNumber, region)) {
+                        return@withTimeoutOrNull fr.bonobo.phonezen.data.model.SpamResult(false, reason = "Liste blanche")
+                    }
+                    
+                    val frenchLocal = fr.bonobo.phonezen.utils.InternationalNumbers.frenchLocal(rawNumber, region)
+                    
+                    // Vérifier les hôpitaux (uniquement pour la France)
+                    if (countryCode == "FR" && frenchLocal != null && isHospitalWhitelistEnabled() && hospitalWhitelistManager.isHospitalNumber(frenchLocal)) {
+                        return@withTimeoutOrNull fr.bonobo.phonezen.data.model.SpamResult(false, reason = "Établissement de santé")
+                    }
+                    
+                    // Vérifier le blocage manuel
+                    val db = AppDatabase.getDatabase(applicationContext)
+                    val blocked = db.blockedNumberDao().getAllOnce().any {
+                        fr.bonobo.phonezen.utils.InternationalNumbers.matchesStored(normalized, it.number, region)
+                    }
+                    if (blocked) {
+                        return@withTimeoutOrNull fr.bonobo.phonezen.data.model.SpamResult(true, reason = "Bloqué manuellement", riskLevel = fr.bonobo.phonezen.data.model.RiskLevel.HIGH)
+                    }
+                    
+                    // Analyse complète (inclut maintenant les règles par pays)
+                    val contact = PhoneUtils.resolveContactInfo(applicationContext, rawNumber, region)
+                    detector.analyze(rawNumber, contact.first, contact.second, region)
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Filtrage indisponible pour $rawNumber, appel autorisé", e)
+                null
+            }
+            
+            if (responded.compareAndSet(false, true)) {
+                handler.removeCallbacks(deadline)
+                
+                val finalResult = result ?: fr.bonobo.phonezen.data.model.SpamResult(
+                    isSpam = false,
+                    reason = "Erreur d'analyse, autorisé par défaut"
+                )
+                
+                // Mettre en cache le résultat
+                cacheResult(cacheKey, finalResult)
+                
+                if (finalResult.isSpam) {
+                    blockCall(callDetails, rawNumber, finalResult.reason, finalResult.riskLevel.name, true)
+                } else {
+                    respondToCall(callDetails, CallResponse.Builder().build())
+                }
+            }
+        }
+    }
+
+    override fun onDestroy() {
+        serviceScope.coroutineContext[kotlinx.coroutines.Job]?.cancel()
+        super.onDestroy()
     }
 
     private fun blockCall(
@@ -161,12 +219,14 @@ class PhoneZenCallScreeningService : CallScreeningService() {
         riskLevel  : String,
         notify     : Boolean
     ) {
+        val storedNumber = PhoneUtils.normalizeNumber(number,
+            fr.bonobo.phonezen.utils.CountrySettings(applicationContext).forAccount(callDetails.accountHandle))
         respondToCall(
             callDetails,
             CallResponse.Builder()
                 .setDisallowCall(true)
                 .setRejectCall(true)
-                .setSilenceCall(true)
+                .apply { if (Build.VERSION.SDK_INT >= 29) setSilenceCall(true) }
                 .setSkipCallLog(false)
                 .setSkipNotification(true)
                 .build()
@@ -176,14 +236,14 @@ class PhoneZenCallScreeningService : CallScreeningService() {
             try {
                 val db = AppDatabase.getDatabase(applicationContext)
                 db.blockedCallDao().insert(
-                    BlockedCall(number = number, reason = reason, riskLevel = riskLevel)
+                    BlockedCall(number = storedNumber, reason = reason, riskLevel = riskLevel)
                 )
             } catch (e: Exception) {
                 Log.e(TAG, "Erreur enregistrement historique : ${e.message}")
             }
         }
 
-        if (notify) sendBlockNotification(number, reason)
+        if (notify) sendBlockNotification(storedNumber, reason)
     }
 
     private fun sendBlockNotification(number: String, reason: String) {

@@ -3,6 +3,9 @@
 // This file is part of PhoneZen.
 package fr.bonobo.phonezen.ui.screens
 
+import androidx.compose.ui.res.stringResource
+import fr.bonobo.phonezen.R
+
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -150,9 +153,9 @@ fun InCallScreen(
 
     val displayName = state.contactName?.takeIf { it.isNotBlank() }
         ?: resolvedName
-        ?: state.number.ifEmpty { "Inconnu" }
+        ?: state.number.ifEmpty { stringResource(R.string.extra_unknown) }
 
-    val waitingDisplayName = secondCallName ?: secondCallNumber ?: "Numéro inconnu"
+    val waitingDisplayName = secondCallName ?: secondCallNumber ?: stringResource(R.string.extra_unknown_number)
 
     val infiniteTransition = rememberInfiniteTransition(label = "pulse")
     val pulseScale by infiniteTransition.animateFloat(
@@ -251,6 +254,7 @@ fun InCallScreen(
             // ── Nom ───────────────────────────────────────────────────────
             Text(
                 displayName,
+                style = androidx.compose.material3.LocalTextStyle.current.copy(textDirection = androidx.compose.ui.text.style.TextDirection.ContentOrLtr),
                 fontSize   = 32.sp,
                 fontWeight = FontWeight.Bold,
                 color      = Color.White
@@ -260,6 +264,7 @@ fun InCallScreen(
             if (resolvedName != null && state.number.isNotBlank()) {
                 Text(
                     state.number,
+                    style = androidx.compose.material3.LocalTextStyle.current.copy(textDirection = androidx.compose.ui.text.style.TextDirection.Ltr),
                     fontSize = 15.sp,
                     color    = Color.LightGray.copy(alpha = 0.7f),
                     modifier = Modifier.padding(top = 4.dp)
@@ -278,12 +283,12 @@ fun InCallScreen(
             // ── Statut / chrono ───────────────────────────────────────────
             Text(
                 text = when (state.status) {
-                    CallStatus.RINGING      -> "Appel entrant..."
-                    CallStatus.DIALING      -> "Appel en cours..."
-                    CallStatus.ACTIVE       -> if (state.isOnHold) "En attente" else formatDuration(state.durationSec)
-                    CallStatus.ON_HOLD      -> "En attente"
-                    CallStatus.DISCONNECTED -> "Appel terminé"
-                    else                    -> "Connexion..."
+                    CallStatus.RINGING      -> stringResource(R.string.extra_incoming_progress)
+                    CallStatus.DIALING      -> stringResource(R.string.extra_dialing)
+                    CallStatus.ACTIVE       -> if (state.isOnHold) stringResource(R.string.extra_hold_state) else formatDuration(state.durationSec)
+                    CallStatus.ON_HOLD      -> stringResource(R.string.extra_hold_state)
+                    CallStatus.DISCONNECTED -> stringResource(R.string.extra_ended)
+                    else                    -> stringResource(R.string.extra_connecting)
                 },
                 fontSize = 18.sp,
                 color    = if (state.status == CallStatus.ACTIVE && !state.isOnHold) neonCyan else Color.LightGray,
@@ -349,29 +354,29 @@ fun InCallScreen(
                         item {
                             ControlCircleBtn(
                                 icon        = if (state.isMuted) Icons.Default.MicOff else Icons.Default.Mic,
-                                label       = if (state.isMuted) "Micro off" else "Muet",
+                                label       = if (state.isMuted) stringResource(R.string.extra_mic_off) else stringResource(R.string.extra_mute),
                                 isToggled   = state.isMuted,
                                 activeColor = neonCyan
                             ) { vm.toggleMute() }
                         }
                         item {
-                            ControlCircleBtn(Icons.Default.Dialpad, "Clavier") {
+                            ControlCircleBtn(Icons.Default.Dialpad, stringResource(R.string.extra_keypad)) {
                                 showDialpad = true
                             }
                         }
                         item {
                             ControlCircleBtn(
                                 icon        = if (state.isOnHold) Icons.Default.CheckCircle else Icons.Default.Pause,
-                                label       = if (state.isOnHold) "Reprendre" else "Attente",
+                                label       = if (state.isOnHold) stringResource(R.string.extra_resume) else stringResource(R.string.extra_hold),
                                 isToggled   = state.isOnHold,
                                 activeColor = if (state.isOnHold) neonGreen else neonCyan
                             ) { vm.toggleHold() }
                         }
                         item {
-                            ControlCircleBtn(Icons.Default.Add, "Ajouter") {}
+                            ControlCircleBtn(Icons.Default.Add, stringResource(R.string.extra_add)) {}
                         }
                         item {
-                            ControlCircleBtn(Icons.Default.Videocam, "Vidéo") {}
+                            ControlCircleBtn(Icons.Default.Videocam, stringResource(R.string.extra_video)) {}
                         }
                         item {
                             AudioRouteButton(
@@ -443,6 +448,21 @@ fun InCallScreen(
 
 @Composable
 private fun SwipeToAnswerReject(
+    neonGreen: Color,
+    neonRed: Color,
+    onAnswer: () -> Unit,
+    onReject: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    androidx.compose.runtime.CompositionLocalProvider(
+        androidx.compose.ui.platform.LocalLayoutDirection provides androidx.compose.ui.unit.LayoutDirection.Ltr
+    ) {
+        SwipeToAnswerRejectContent(neonGreen, neonRed, onAnswer, onReject, modifier)
+    }
+}
+
+@Composable
+private fun SwipeToAnswerRejectContent(
     neonGreen : Color,
     neonRed   : Color,
     onAnswer  : () -> Unit,
@@ -488,7 +508,7 @@ private fun SwipeToAnswerReject(
     ) {
         // ── Hint ──────────────────────────────────────────────────────────
         Text(
-            text     = "Glisser pour répondre ou refuser",
+            text     = stringResource(R.string.extra_swipe_hint),
             color    = Color.White.copy(alpha = 0.4f),
             fontSize = 12.sp,
             modifier = Modifier.padding(bottom = 18.dp)
@@ -530,7 +550,7 @@ private fun SwipeToAnswerReject(
         ) {
             // Label gauche — Refuser
             Text(
-                text       = "✕  Refuser",
+                text       = "✕  " + stringResource(R.string.extra_decline),
                 color      = neonRed.copy(alpha = rejectAlpha),
                 fontSize   = 14.sp,
                 fontWeight = FontWeight.SemiBold,
@@ -539,7 +559,7 @@ private fun SwipeToAnswerReject(
 
             // Label droite — Répondre
             Text(
-                text       = "Répondre  ✓",
+                text       = stringResource(R.string.extra_answer) + "  ✓",
                 color      = neonGreen.copy(alpha = answerAlpha),
                 fontSize   = 14.sp,
                 fontWeight = FontWeight.SemiBold,
@@ -566,7 +586,7 @@ private fun SwipeToAnswerReject(
                         ratio < -0.08f -> Icons.Default.CallEnd
                         else           -> Icons.Default.Call
                     },
-                    contentDescription = "Swipe",
+                    contentDescription = stringResource(R.string.extra_swipe),
                     tint               = Color.White,
                     modifier           = Modifier.size(30.dp)
                 )
@@ -580,8 +600,8 @@ private fun SwipeToAnswerReject(
                 .padding(top = 10.dp, start = 8.dp, end = 8.dp),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Text("◀  Refuser",   color = neonRed.copy(alpha   = 0.5f), fontSize = 11.sp)
-            Text("Répondre  ▶", color = neonGreen.copy(alpha = 0.5f), fontSize = 11.sp)
+            Text("◀  " + stringResource(R.string.extra_decline),   color = neonRed.copy(alpha   = 0.5f), fontSize = 11.sp)
+            Text(stringResource(R.string.extra_answer) + "  ▶", color = neonGreen.copy(alpha = 0.5f), fontSize = 11.sp)
         }
     }
 }
@@ -622,9 +642,9 @@ fun ArcepBadge(info: ArcepInfo) {
 @Composable
 fun TrustBadge(trustLevel: CallTrustLevel) {
     val style = when (trustLevel) {
-        CallTrustLevel.Trusted    -> TrustStyle(Color(0xFF0D2B1A), Color(0xFF22C55E), Icons.Default.VerifiedUser, "Appelant de confiance", null)
-        CallTrustLevel.Suspicious -> TrustStyle(Color(0xFF2D1F00), Color(0xFFF97316), Icons.Default.Warning,      "Numéro suspect",        "Ne dites pas « Oui » — risque d'enregistrement vocal")
-        CallTrustLevel.Spam       -> TrustStyle(Color(0xFF3B0000), Color(0xFFEF4444), Icons.Default.GppBad,       "Spam / Fraude",         null)
+        CallTrustLevel.Trusted    -> TrustStyle(Color(0xFF0D2B1A), Color(0xFF22C55E), Icons.Default.VerifiedUser, stringResource(R.string.extra_trusted), null)
+        CallTrustLevel.Suspicious -> TrustStyle(Color(0xFF2D1F00), Color(0xFFF97316), Icons.Default.Warning,      stringResource(R.string.extra_suspicious),        stringResource(R.string.extra_voice_warning))
+        CallTrustLevel.Spam       -> TrustStyle(Color(0xFF3B0000), Color(0xFFEF4444), Icons.Default.GppBad,       stringResource(R.string.extra_fraud),         null)
         CallTrustLevel.Unknown    -> return
     }
     val infiniteTransition = rememberInfiniteTransition(label = "trustPulse")
@@ -678,16 +698,16 @@ private fun SecondCallIncomingOverlay(
             modifier        = Modifier.fillMaxWidth()
         ) {
             Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("Appel entrant", style = androidx.compose.material3.MaterialTheme.typography.labelMedium, color = neonCyan, fontWeight = FontWeight.SemiBold)
+                Text(stringResource(R.string.extra_incoming), style = androidx.compose.material3.MaterialTheme.typography.labelMedium, color = neonCyan, fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.height(8.dp))
                 Text(callerName, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 if (!callerNumber.isNullOrBlank() && callerNumber != callerName)
                     Text(callerNumber, fontSize = 13.sp, color = Color.LightGray.copy(alpha = 0.75f))
                 Spacer(Modifier.height(16.dp))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-                    OverlayActionButton(Icons.Default.CallEnd,     "Refuser",  neonRed,   onDecline)
-                    OverlayActionButton(Icons.Rounded.PhonePaused, "Rester",   neonCyan,  onStayOnFirstCall)
-                    OverlayActionButton(Icons.Default.Call,        "Répondre", neonGreen, onAnswer)
+                    OverlayActionButton(Icons.Default.CallEnd,     stringResource(R.string.extra_decline),  neonRed,   onDecline)
+                    OverlayActionButton(Icons.Rounded.PhonePaused, stringResource(R.string.extra_stay),   neonCyan,  onStayOnFirstCall)
+                    OverlayActionButton(Icons.Default.Call,        stringResource(R.string.extra_answer), neonGreen, onAnswer)
                 }
             }
         }
@@ -724,9 +744,9 @@ private fun HangupButton(
         if (hasSecondCall) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 IconButton(onClick = onSwap, modifier = Modifier.size(64.dp).background(neonCyan, CircleShape)) {
-                    Icon(Icons.Default.SwapCalls, "Permuter", tint = Color.Black, modifier = Modifier.size(28.dp))
+                    Icon(Icons.Default.SwapCalls, stringResource(R.string.extra_swap), tint = Color.Black, modifier = Modifier.size(28.dp))
                 }
-                Text("Permuter", color = neonCyan, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
+                Text(stringResource(R.string.extra_swap), color = neonCyan, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
             }
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -734,7 +754,7 @@ private fun HangupButton(
                 Icon(Icons.Default.CallEnd, null, tint = Color.White, modifier = Modifier.size(32.dp))
             }
             if (hasSecondCall)
-                Text("Raccrocher", color = Color.White, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
+                Text(stringResource(R.string.extra_hang_up), color = Color.White, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
         }
     }
 }
@@ -765,10 +785,10 @@ private fun SecondCallBanner(
             }
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(if (isPrimaryOnHold) "Appel en attente" else "Double appel", color = color, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                Text(if (isPrimaryOnHold) stringResource(R.string.extra_call_on_hold) else stringResource(R.string.extra_second_call), color = color, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                 Text(displayName, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
                 if (!number.isNullOrBlank() && number != displayName)
-                    Text(number, color = Color.LightGray.copy(alpha = 0.75f), fontSize = 12.sp)
+                    Text(number, style = androidx.compose.material3.LocalTextStyle.current.copy(textDirection = androidx.compose.ui.text.style.TextDirection.Ltr), color = Color.LightGray.copy(alpha = 0.75f), fontSize = 12.sp)
             }
         }
         Spacer(Modifier.height(20.dp))
@@ -776,22 +796,22 @@ private fun SecondCallBanner(
             if (isPrimaryOnHold) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     IconButton(onClick = onSwap, modifier = Modifier.size(52.dp).background(color, CircleShape)) {
-                        Icon(Icons.Default.SwapCalls, "Permuter", tint = Color.Black, modifier = Modifier.size(24.dp))
+                        Icon(Icons.Default.SwapCalls, stringResource(R.string.extra_swap), tint = Color.Black, modifier = Modifier.size(24.dp))
                     }
-                    Text("Permuter", color = Color.White, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
+                    Text(stringResource(R.string.extra_swap), color = Color.White, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
                 }
             } else {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     IconButton(onClick = onReject, modifier = Modifier.size(52.dp).background(neonRed, CircleShape)) {
-                        Icon(Icons.Default.CallEnd, "Refuser second", tint = Color.White, modifier = Modifier.size(24.dp))
+                        Icon(Icons.Default.CallEnd, stringResource(R.string.extra_decline_second), tint = Color.White, modifier = Modifier.size(24.dp))
                     }
-                    Text("Refuser", color = Color.White, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
+                    Text(stringResource(R.string.extra_decline), color = Color.White, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
                 }
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     IconButton(onClick = onAnswer, modifier = Modifier.size(52.dp).background(neonGreen, CircleShape)) {
-                        Icon(Icons.Default.Call, "Répondre second", tint = Color.White, modifier = Modifier.size(24.dp))
+                        Icon(Icons.Default.Call, stringResource(R.string.extra_answer_second), tint = Color.White, modifier = Modifier.size(24.dp))
                     }
-                    Text("Répondre", color = Color.White, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
+                    Text(stringResource(R.string.extra_answer), color = Color.White, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
                 }
             }
         }
@@ -811,13 +831,13 @@ fun AudioRouteButton(
 ) {
     var expanded by remember { mutableStateOf(false) }
     val (activeIcon, activeLabel) = when (currentRoute) {
-        AudioRoute.SPEAKER   -> Icons.Default.VolumeUp  to "HP"
+        AudioRoute.SPEAKER   -> Icons.Default.VolumeUp  to stringResource(R.string.extra_speaker_short)
         AudioRoute.BLUETOOTH -> Icons.Default.Bluetooth to "Bluetooth"
-        AudioRoute.EARPIECE  -> Icons.Default.Headset   to "Écouteur"
+        AudioRoute.EARPIECE  -> Icons.Default.Headset   to stringResource(R.string.extra_earpiece)
     }
     val options = listOf(
-        Triple(AudioRoute.EARPIECE,  Icons.Default.Headset,   "Écouteur"),
-        Triple(AudioRoute.SPEAKER,   Icons.Default.VolumeUp,  "Haut-parleur"),
+        Triple(AudioRoute.EARPIECE,  Icons.Default.Headset,   stringResource(R.string.extra_earpiece)),
+        Triple(AudioRoute.SPEAKER,   Icons.Default.VolumeUp,  stringResource(R.string.extra_speaker)),
         Triple(AudioRoute.BLUETOOTH, Icons.Default.Bluetooth, "Bluetooth")
     )
     Box {
@@ -857,10 +877,10 @@ fun AudioRouteButton(
 @Composable
 fun RiskBanner(riskLevel: RiskLevel, score: Int, reason: String?) {
     val (bgColor, borderColor, icon, label) = when (riskLevel) {
-        RiskLevel.CRITICAL -> RiskStyle(Color(0xFF3B0000), Color(0xFFEF4444), Icons.Default.GppBad,        "Danger critique")
-        RiskLevel.HIGH     -> RiskStyle(Color(0xFF2D1000), Color(0xFFEF4444), Icons.Default.Warning,       "Risque élevé")
-        RiskLevel.MEDIUM   -> RiskStyle(Color(0xFF2D1F00), Color(0xFFF97316), Icons.Default.ReportProblem, "Risque modéré")
-        RiskLevel.LOW      -> RiskStyle(Color(0xFF1A2300), Color(0xFFEAB308), Icons.Default.Info,          "Risque faible")
+        RiskLevel.CRITICAL -> RiskStyle(Color(0xFF3B0000), Color(0xFFEF4444), Icons.Default.GppBad,        stringResource(R.string.extra_risk_critical))
+        RiskLevel.HIGH     -> RiskStyle(Color(0xFF2D1000), Color(0xFFEF4444), Icons.Default.Warning,       stringResource(R.string.extra_risk_high))
+        RiskLevel.MEDIUM   -> RiskStyle(Color(0xFF2D1F00), Color(0xFFF97316), Icons.Default.ReportProblem, stringResource(R.string.extra_risk_medium))
+        RiskLevel.LOW      -> RiskStyle(Color(0xFF1A2300), Color(0xFFEAB308), Icons.Default.Info,          stringResource(R.string.extra_risk_low))
         RiskLevel.NONE     -> RiskStyle(Color.Transparent, Color.Transparent, Icons.Default.CheckCircle,   "")
     }
     Row(
@@ -917,6 +937,15 @@ fun ControlCircleBtn(
 
 @Composable
 fun DtmfKeypad(onClose: () -> Unit, onKeyClick: (Char) -> Unit) {
+    androidx.compose.runtime.CompositionLocalProvider(
+        androidx.compose.ui.platform.LocalLayoutDirection provides androidx.compose.ui.unit.LayoutDirection.Ltr
+    ) {
+        DtmfKeypadContent(onClose, onKeyClick)
+    }
+}
+
+@Composable
+private fun DtmfKeypadContent(onClose: () -> Unit, onKeyClick: (Char) -> Unit) {
     val keys = listOf('1','2','3','4','5','6','7','8','9','*','0','#')
     Column(modifier = Modifier.fillMaxWidth().background(Color.Black.copy(alpha = 0.8f)).padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         IconButton(onClick = onClose, modifier = Modifier.align(Alignment.End)) {

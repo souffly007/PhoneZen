@@ -3,6 +3,8 @@
 // This file is part of PhoneZen.
 package fr.bonobo.phonezen.ui.screens
 
+import fr.bonobo.phonezen.R
+
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
@@ -41,7 +43,8 @@ fun SettingsScreen(
     onNavigateToWhitelist  : () -> Unit = {},
     onNavigateToTheme      : () -> Unit = {},
     onNavigateToTopReported: () -> Unit = {},
-    onNavigateToProfiles   : () -> Unit = {}
+    onNavigateToProfiles   : () -> Unit = {},
+    onNavigateToBlockedCalls: () -> Unit = {}
 ) {
     val c                = LocalColors.current
     val ctx              = LocalContext.current
@@ -58,6 +61,7 @@ fun SettingsScreen(
     val activeProfile    by vm.activeProfile.collectAsState()
     val vacationConfig   by vm.vacationConfig.collectAsState()
     val callPopupMode    by vm.callPopupMode.collectAsState()
+    val settingsRevision by vm.settingsRevision.collectAsState()
 
     val hospitalEnabled  by vm.hospitalWhitelistEnabled.collectAsState()
     val hospitalCount    by vm.hospitalEntriesCount.collectAsState()
@@ -93,12 +97,13 @@ fun SettingsScreen(
             .background(c.background)
             .verticalScroll(rememberScrollState())
     ) {
-        SettingsTopBar("Réglages")
+        SettingsTopBar(ctx.getString(R.string.settings_title))
+        CountrySettingsSection(settingsRevision = settingsRevision) { vm.forceReload(ctx) }
 
         // ══════════════════════════════════════════════════════════════
         // PROFILS DE BLOCAGE
         // ══════════════════════════════════════════════════════════════
-        SectionHeader("👤 Profil de blocage")
+        SectionHeader(ctx.getString(R.string.profile_section))
 
         Card(
             modifier = Modifier
@@ -117,7 +122,7 @@ fun SettingsScreen(
                 Column(Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            "Profil : ${activeProfile.label}",
+                            ctx.getString(R.string.profile_name, activeProfile.localizedLabel(ctx)),
                             fontSize   = 15.sp,
                             color      = c.textPrimary,
                             fontWeight = FontWeight.Medium
@@ -132,7 +137,7 @@ fun SettingsScreen(
                             }
                         ) {
                             Text(
-                                text     = "ACTIF",
+                                text     = ctx.getString(R.string.active),
                                 fontSize = 9.sp,
                                 color    = when (activeProfile) {
                                     BlockingProfile.WORK     -> c.neonCyan
@@ -145,14 +150,14 @@ fun SettingsScreen(
                         }
                     }
                     val subtitle = when (activeProfile) {
-                        BlockingProfile.WORK     -> "Contacts, favoris et numéros pro autorisés"
-                        BlockingProfile.HOME     -> "Contacts et favoris uniquement"
+                        BlockingProfile.WORK     -> ctx.getString(R.string.work_allowed)
+                        BlockingProfile.HOME     -> ctx.getString(R.string.home_allowed)
                         BlockingProfile.VACATION ->
                             if (vacationConfig.hasEndDate && !vacationConfig.isExpired) {
-                                val fmt = java.text.SimpleDateFormat("dd/MM", java.util.Locale.FRANCE)
-                                "Favoris uniquement · Retour le ${fmt.format(java.util.Date(vacationConfig.endTimestamp))}"
+                                val fmt = java.text.SimpleDateFormat("dd/MM", java.util.Locale.getDefault())
+                                ctx.getString(R.string.vacation_return, fmt.format(java.util.Date(vacationConfig.endTimestamp)))
                             } else {
-                                "Favoris et liste blanche uniquement"
+                                ctx.getString(R.string.vacation_allowed)
                             }
                     }
                     Text(subtitle, fontSize = 12.sp, color = c.textSecond)
@@ -184,7 +189,7 @@ fun SettingsScreen(
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(profile.emoji, fontSize = 18.sp)
-                        Text(profile.label, fontSize = 10.sp, fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal)
+                        Text(profile.localizedLabel(ctx), fontSize = 10.sp, fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal)
                     }
                 }
             }
@@ -193,25 +198,25 @@ fun SettingsScreen(
         // ══════════════════════════════════════════════════════════════
         // PROTECTION
         // ══════════════════════════════════════════════════════════════
-        SectionHeader("🛡️ Protection")
+        SectionHeader(ctx.getString(R.string.protection_section))
 
         SettingSwitch(
             icon     = Icons.Default.VisibilityOff,
-            title    = "Bloquer numéros privés/masqués",
-            subtitle = "Rejette automatiquement les appels sans numéro",
+            title    = ctx.getString(R.string.block_private),
+            subtitle = ctx.getString(R.string.block_private_summary),
             checked  = blockPrivate,
             onToggle = { vm.setBlockPrivate(it) }
         )
         SettingSwitch(
             icon     = Icons.Default.FilterList,
-            title    = "Masquer les appels bloqués",
-            subtitle = "Les appels bloqués n'apparaissent pas dans les récents",
+            title    = ctx.getString(R.string.hide_blocked),
+            subtitle = ctx.getString(R.string.hide_blocked_summary),
             checked  = hideBlocked,
             onToggle = { vm.setHideBlocked(it) }
         )
         SettingItem(
             icon     = Icons.Default.Block,
-            title    = "Filtres anti-spam actifs",
+            title    = ctx.getString(R.string.spam_filters),
             subtitle = "prefixes_blocked_fr.json v4.1 (2026-04-05)",
             onClick  = {}
         )
@@ -236,16 +241,16 @@ fun SettingsScreen(
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     Text(
-                        "Whitelist établissements de santé",
+                        ctx.getString(R.string.health_allowlist),
                         fontSize   = 15.sp,
                         color      = c.textPrimary,
                         fontWeight = FontWeight.Medium
                     )
                     Text(
                         when {
-                            !hospitalEnabled  -> "Désactivée — les hôpitaux peuvent être bloqués"
-                            hospitalCount > 0 -> "$hospitalCount établissements · Source FINESS 2026"
-                            else              -> "Chargement..."
+                            !hospitalEnabled  -> ctx.getString(R.string.health_disabled)
+                            hospitalCount > 0 -> ctx.getString(R.string.health_count, hospitalCount)
+                            else              -> ctx.getString(R.string.loading)
                         },
                         fontSize = 12.sp,
                         color    = if (hospitalEnabled) c.textSecond else c.neonOrange
@@ -265,19 +270,25 @@ fun SettingsScreen(
         }
 
         if (!hospitalEnabled) {
-            InfoCard("⚠️ Désactivée : les appels d'hôpitaux, SAMU et urgences peuvent être bloqués par les autres filtres.")
+            InfoCard(ctx.getString(R.string.health_warning))
         }
 
         SettingItem(
             icon     = Icons.Default.WarningAmber,
-            title    = "Top numéros signalés",
-            subtitle = "Numéros les plus signalés par la communauté",
+            title    = ctx.getString(R.string.top_reports),
+            subtitle = ctx.getString(R.string.top_reports_summary),
             onClick  = onNavigateToTopReported
+        )
+        SettingItem(
+            icon     = Icons.Default.History,
+            title    = ctx.getString(R.string.blocked_calls_history),
+            subtitle = ctx.getString(R.string.blocked_calls_history_summary),
+            onClick  = onNavigateToBlockedCalls
         )
         SettingSwitch(
             icon     = Icons.Default.Groups,
-            title    = "Blocage communautaire auto",
-            subtitle = "Bloque automatiquement les numéros signalés 10× ou plus",
+            title    = ctx.getString(R.string.community_auto),
+            subtitle = ctx.getString(R.string.community_summary),
             checked  = vm.spamDetector.isCommunityBlockEnabled(),
             onToggle = { vm.spamDetector.setCommunityBlockEnabled(it) }
         )
@@ -285,99 +296,64 @@ fun SettingsScreen(
         // ══════════════════════════════════════════════════════════════
         // NE PAS DÉRANGER
         // ══════════════════════════════════════════════════════════════
-        SectionHeader("🌙 Mode Ne pas déranger")
+        SectionHeader(ctx.getString(R.string.dnd_section))
 
         SettingSwitch(
             icon     = Icons.Default.DoNotDisturb,
-            title    = "Ne pas déranger",
+            title    = ctx.getString(R.string.dnd),
             subtitle = if (doNotDisturb)
-                "Actif — tous les appels bloqués sauf liste blanche"
+                ctx.getString(R.string.dnd_enabled)
             else
-                "Inactif — tous les appels passent normalement",
+                ctx.getString(R.string.dnd_disabled),
             checked  = doNotDisturb,
             onToggle = { vm.setDoNotDisturb(it) }
         )
         if (doNotDisturb) {
-            InfoCard("⚠️ Seuls les numéros de votre liste blanche et les services d'urgence (15, 17, 18, 112) peuvent vous joindre.")
+            InfoCard(ctx.getString(R.string.dnd_warning))
         }
 
         // ══════════════════════════════════════════════════════════════
         // HORAIRES
         // ══════════════════════════════════════════════════════════════
-        SectionHeader("⏰ Horaires de blocage")
+        SectionHeader(ctx.getString(R.string.schedule_section))
 
         SettingSwitch(
             icon     = Icons.Default.Schedule,
-            title    = "Blocage par horaires",
-            subtitle = "Bloque les inconnus/spam pendant les heures définies",
+            title    = ctx.getString(R.string.schedule),
+            subtitle = ctx.getString(R.string.schedule_summary),
             checked  = scheduleEnabled,
             onToggle = { vm.setScheduleEnabled(it) }
         )
         if (scheduleEnabled) {
-            TimePickerCard(label = "Début du blocage", hour = scheduleStartH, minute = scheduleStartM, onClick = { showStartPicker = true })
-            TimePickerCard(label = "Fin du blocage",   hour = scheduleEndH,   minute = scheduleEndM,   onClick = { showEndPicker = true })
+            TimePickerCard(label = ctx.getString(R.string.schedule_start), hour = scheduleStartH, minute = scheduleStartM, onClick = { showStartPicker = true })
+            TimePickerCard(label = ctx.getString(R.string.schedule_end),   hour = scheduleEndH,   minute = scheduleEndM,   onClick = { showEndPicker = true })
             val startStr = "%02d:%02d".format(scheduleStartH, scheduleStartM)
             val endStr   = "%02d:%02d".format(scheduleEndH,   scheduleEndM)
-            InfoCard("📋 Les inconnus et numéros spam seront bloqués de $startStr à $endStr.")
+            InfoCard(ctx.getString(R.string.schedule_info, startStr, endStr))
         }
 
         // ══════════════════════════════════════════════════════════════
         // LISTE BLANCHE
         // ══════════════════════════════════════════════════════════════
-        SectionHeader("✅ Liste blanche")
+        SectionHeader(ctx.getString(R.string.allowlist_section))
 
         SettingItem(
             icon     = Icons.Default.PlaylistAddCheck,
-            title    = "Gérer la liste blanche",
-            subtitle = "Numéros jamais bloqués, même en mode NePasDéranger",
+            title    = ctx.getString(R.string.manage_allowlist),
+            subtitle = ctx.getString(R.string.allowlist_summary),
             onClick  = onNavigateToWhitelist
         )
 
         // ══════════════════════════════════════════════════════════════
         // AFFICHAGE DES APPELS
         // ══════════════════════════════════════════════════════════════
-        SectionHeader("📞 Affichage des appels")
+        SectionHeader(ctx.getString(R.string.call_display_section))
 
-        // Avertissement permission si mode non-fullscreen sélectionné
-        // et permission pas encore accordée
-        if (callPopupMode != CallPopupMode.FULLSCREEN && !canDrawOverlays.value) {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 4.dp),
-                shape  = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(containerColor = c.neonOrange.copy(alpha = 0.1f)),
-                onClick = {
-                    ctx.startActivity(
-                        Intent(
-                            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                            Uri.parse("package:${ctx.packageName}")
-                        )
-                    )
-                }
-            ) {
-                Row(
-                    modifier          = Modifier.padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(Icons.Default.Warning, null, tint = c.neonOrange, modifier = Modifier.size(20.dp))
-                    Spacer(Modifier.width(10.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            "Permission requise",
-                            fontSize   = 13.sp,
-                            color      = c.neonOrange,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            "Appuyez ici pour autoriser l'affichage par-dessus les autres applis",
-                            fontSize = 12.sp,
-                            color    = c.neonOrange.copy(alpha = 0.8f)
-                        )
-                    }
-                    Icon(Icons.Default.ChevronRight, null, tint = c.neonOrange)
-                }
-            }
+        if (android.os.Build.VERSION.SDK_INT >= 34) {
+            TextButton(onClick = {
+                ctx.startActivity(Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT,
+                    Uri.parse("package:${ctx.packageName}")))
+            }) { Text(ctx.getString(R.string.lock_calls)) }
         }
 
         // Sélecteur de mode : 3 boutons
@@ -390,13 +366,13 @@ fun SettingsScreen(
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(
-                    "Mode d'affichage lors d'un appel",
+                    ctx.getString(R.string.call_display),
                     fontSize   = 15.sp,
                     color      = c.textPrimary,
                     fontWeight = FontWeight.Medium
                 )
                 Text(
-                    "Choisir comment l'écran d'appel apparaît",
+                    ctx.getString(R.string.call_display_summary),
                     fontSize = 12.sp,
                     color    = c.textSecond,
                     modifier = Modifier.padding(bottom = 12.dp)
@@ -409,18 +385,7 @@ fun SettingsScreen(
                         val isActive = callPopupMode == mode
                         OutlinedButton(
                             onClick  = {
-                                if (mode != CallPopupMode.FULLSCREEN && !Settings.canDrawOverlays(ctx)) {
-                                    // Demander la permission d'abord
-                                    ctx.startActivity(
-                                        Intent(
-                                            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                                            Uri.parse("package:${ctx.packageName}")
-                                        )
-                                    )
-                                } else {
-                                    vm.setCallPopupMode(mode)
-                                    canDrawOverlays.value = Settings.canDrawOverlays(ctx)
-                                }
+                                vm.setCallPopupMode(mode)
                             },
                             modifier = Modifier.weight(1f),
                             shape    = RoundedCornerShape(10.dp),
@@ -440,7 +405,7 @@ fun SettingsScreen(
                                 Text(mode.emoji, fontSize = 20.sp)
                                 Spacer(Modifier.height(4.dp))
                                 Text(
-                                    mode.label,
+                                    mode.localizedLabel(ctx),
                                     fontSize   = 10.sp,
                                     fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal
                                 )
@@ -451,9 +416,9 @@ fun SettingsScreen(
                 // Description du mode actif
                 Text(
                     text = when (callPopupMode) {
-                        CallPopupMode.FULLSCREEN -> "📱 L'appel prend tout l'écran (comportement par défaut)"
-                        CallPopupMode.COMPACT    -> "🪟 Carte en bas de l'écran, vous pouvez continuer à utiliser votre téléphone"
-                        CallPopupMode.MINI       -> "➖ Fine barre en haut de l'écran, discret et minimal"
+                        CallPopupMode.FULLSCREEN -> ctx.getString(R.string.fullscreen_summary)
+                        CallPopupMode.COMPACT    -> ctx.getString(R.string.compact_summary)
+                        CallPopupMode.MINI       -> ctx.getString(R.string.mini_summary)
                     },
                     fontSize = 12.sp,
                     color    = c.neonCyan.copy(alpha = 0.8f),
@@ -465,7 +430,7 @@ fun SettingsScreen(
         // ══════════════════════════════════════════════════════════════
         // SAUVEGARDE
         // ══════════════════════════════════════════════════════════════
-        SectionHeader("💾 Sauvegarde & Restauration")
+        SectionHeader(ctx.getString(R.string.backup_section))
 
         backupMessage?.let { msg -> InfoCard(msg) }
 
@@ -481,15 +446,15 @@ fun SettingsScreen(
                         val uri = BackupManager.createBackup(ctx)
                         isBackupLoading = false
                         if (uri != null) {
-                            backupMessage = "✅ Sauvegarde créée"
+                            backupMessage = ctx.getString(R.string.backup_ok)
                             val shareIntent = Intent(Intent.ACTION_SEND).apply {
                                 type = "application/json"
                                 putExtra(Intent.EXTRA_STREAM, uri)
                                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                             }
-                            shareLauncher.launch(Intent.createChooser(shareIntent, "Partager la sauvegarde"))
+                            shareLauncher.launch(Intent.createChooser(shareIntent, ctx.getString(R.string.share_backup)))
                         } else {
-                            backupMessage = "❌ Erreur lors de la sauvegarde"
+                            backupMessage = ctx.getString(R.string.backup_error)
                         }
                     }
                 }
@@ -503,8 +468,8 @@ fun SettingsScreen(
                 }
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("Sauvegarder", fontSize = 15.sp, color = c.textPrimary, fontWeight = FontWeight.Medium)
-                    Text("Exporte favoris, liste blanche, blocages et paramètres", fontSize = 12.sp, color = c.textSecond)
+                    Text(ctx.getString(R.string.backup), fontSize = 15.sp, color = c.textPrimary, fontWeight = FontWeight.Medium)
+                    Text(ctx.getString(R.string.backup_summary), fontSize = 12.sp, color = c.textSecond)
                 }
                 Icon(Icons.Default.ChevronRight, null, tint = c.textSecond)
             }
@@ -520,8 +485,8 @@ fun SettingsScreen(
                 Icon(Icons.Default.RestorePage, null, tint = c.neonOrange, modifier = Modifier.size(22.dp))
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("Restaurer", fontSize = 15.sp, color = c.textPrimary, fontWeight = FontWeight.Medium)
-                    Text("Importe une sauvegarde PhoneZen existante", fontSize = 12.sp, color = c.textSecond)
+                    Text(ctx.getString(R.string.restore), fontSize = 15.sp, color = c.textPrimary, fontWeight = FontWeight.Medium)
+                    Text(ctx.getString(R.string.restore_summary), fontSize = 12.sp, color = c.textSecond)
                 }
                 Icon(Icons.Default.ChevronRight, null, tint = c.textSecond)
             }
@@ -530,15 +495,15 @@ fun SettingsScreen(
         // ══════════════════════════════════════════════════════════════
         // APPARENCE
         // ══════════════════════════════════════════════════════════════
-        SectionHeader("🎨 Apparence")
+        SectionHeader(ctx.getString(R.string.appearance_section))
 
         SettingItem(
             icon     = Icons.Default.Palette,
-            title    = "Thème de l'application",
+            title    = ctx.getString(R.string.app_theme),
             subtitle = when (currentTheme) {
-                AppTheme.CYBER_DARK -> "Cyber Dark (actif)"
-                AppTheme.ZEN_LIGHT  -> "Zen Clair (actif)"
-                AppTheme.CYANOGEN   -> "Cyanogen (actif)"
+                AppTheme.CYBER_DARK -> ctx.getString(R.string.cyber_active)
+                AppTheme.ZEN_LIGHT  -> ctx.getString(R.string.zen_active)
+                AppTheme.CYANOGEN   -> ctx.getString(R.string.cyanogen_active)
             },
             onClick = onNavigateToTheme
         )
@@ -546,12 +511,12 @@ fun SettingsScreen(
         // ══════════════════════════════════════════════════════════════
         // APP PAR DÉFAUT
         // ══════════════════════════════════════════════════════════════
-        SectionHeader("📱 Application par défaut")
+        SectionHeader(ctx.getString(R.string.default_section))
 
         SettingItem(
             icon     = Icons.Default.Phone,
-            title    = "Définir comme application téléphone",
-            subtitle = "Requis pour gérer les appels entrants",
+            title    = ctx.getString(R.string.default_phone),
+            subtitle = ctx.getString(R.string.default_phone_summary),
             onClick  = {
                 try { ctx.startActivity(Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS)) }
                 catch (e: Exception) {
@@ -563,8 +528,8 @@ fun SettingsScreen(
         )
         SettingItem(
             icon     = Icons.Default.Security,
-            title    = "Définir comme service de filtrage",
-            subtitle = "Requis pour bloquer les appels spam",
+            title    = ctx.getString(R.string.default_screening),
+            subtitle = ctx.getString(R.string.default_screening_summary),
             onClick  = {
                 try {
                     ctx.startActivity(Intent("android.telecom.action.CHANGE_CALL_SCREENING_APP").apply {
@@ -579,7 +544,7 @@ fun SettingsScreen(
         // ══════════════════════════════════════════════════════════════
         // CONSEILS
         // ══════════════════════════════════════════════════════════════
-        SectionHeader("💡 Conseils sécurité")
+        SectionHeader(ctx.getString(R.string.security_section))
 
         Card(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
@@ -588,11 +553,11 @@ fun SettingsScreen(
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 listOf(
-                    " ❌ Ne rappelez jamais un numéro inconnu après un appel en absence (arnaque ping call)",
-                    " ❌ Ne donnez jamais vos codes bancaires ou identifiants par téléphone",
-                    " ❌ Méfiez-vous des numéros commençant par 08 ou très courts",
-                    " ✅ Inscrivez-vous sur Bloctel pour réduire le démarchage",
-                    " ✅ Signalez les appels abusifs au 33700 (SMS ou site officiel)"
+                    ctx.getString(R.string.tip_ping),
+                    ctx.getString(R.string.tip_bank),
+                    ctx.getString(R.string.tip_short),
+                    ctx.getString(R.string.tip_bloctel),
+                    ctx.getString(R.string.tip_report)
                 ).forEach { tip ->
                     Text(tip, fontSize = 13.sp, color = c.textSecond, modifier = Modifier.padding(vertical = 2.dp))
                 }
@@ -603,7 +568,7 @@ fun SettingsScreen(
         // ══════════════════════════════════════════════════════════════
         // DIAGNOSTIC
         // ══════════════════════════════════════════════════════════════
-        SectionHeader("🐛 Diagnostic")
+        SectionHeader(ctx.getString(R.string.diagnostic_section))
 
         if (hasCrashReport.value) {
             Card(
@@ -620,7 +585,7 @@ fun SettingsScreen(
                     Icon(Icons.Default.BugReport, null, tint = c.neonOrange, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(10.dp))
                     Text(
-                        "Un rapport de crash est disponible",
+                        ctx.getString(R.string.crash_available),
                         fontSize   = 13.sp,
                         color      = c.neonOrange,
                         fontWeight = FontWeight.SemiBold,
@@ -646,10 +611,10 @@ fun SettingsScreen(
                 val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
                     type = "text/plain"
                     putExtra(android.content.Intent.EXTRA_STREAM, uri)
-                    putExtra(android.content.Intent.EXTRA_SUBJECT, "PhoneZen — Rapport de crash")
+                    putExtra(android.content.Intent.EXTRA_SUBJECT, ctx.getString(R.string.crash_subject))
                     addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 }
-                ctx.startActivity(android.content.Intent.createChooser(intent, "Partager le rapport"))
+                ctx.startActivity(android.content.Intent.createChooser(intent, ctx.getString(R.string.share_report)))
             }
         ) {
             Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -662,16 +627,16 @@ fun SettingsScreen(
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     Text(
-                        "Partager le dernier rapport",
+                        ctx.getString(R.string.share_last_report),
                         fontSize   = 15.sp,
                         color      = c.textPrimary,
                         fontWeight = FontWeight.Medium
                     )
                     Text(
                         if (hasCrashReport.value)
-                            "${CrashHandler.getCrashReports(ctx).size} rapport(s) disponible(s)"
+                            ctx.resources.getQuantityString(R.plurals.crash_reports, CrashHandler.getCrashReports(ctx).size, CrashHandler.getCrashReports(ctx).size)
                         else
-                            "Aucun crash enregistré — tout va bien !",
+                            ctx.getString(R.string.no_crashes),
                         fontSize = 12.sp,
                         color    = if (hasCrashReport.value) c.neonOrange else c.textSecond
                     )
@@ -695,8 +660,8 @@ fun SettingsScreen(
                     Icon(Icons.Default.DeleteSweep, null, tint = c.neonOrange, modifier = Modifier.size(22.dp))
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
-                        Text("Effacer tous les rapports", fontSize = 15.sp, color = c.textPrimary, fontWeight = FontWeight.Medium)
-                        Text("Libère l'espace occupé par les fichiers de diagnostic", fontSize = 12.sp, color = c.textSecond)
+                        Text(ctx.getString(R.string.clear_reports), fontSize = 15.sp, color = c.textPrimary, fontWeight = FontWeight.Medium)
+                        Text(ctx.getString(R.string.clear_reports_summary), fontSize = 12.sp, color = c.textSecond)
                     }
                 }
             }
@@ -705,12 +670,12 @@ fun SettingsScreen(
         // ══════════════════════════════════════════════════════════════
         // À PROPOS
         // ══════════════════════════════════════════════════════════════
-        SectionHeader("ℹ️ À propos")
+        SectionHeader(ctx.getString(R.string.about_section))
 
         SettingItem(
             icon     = Icons.Default.Info,
             title    = "PhoneZen",
-            subtitle = "Développé par Franck R-F (souffly007) · GPL v3",
+            subtitle = ctx.getString(R.string.author),
             onClick  = {
                 ctx.startActivity(
                     Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/souffly007/PhoneZen"))
@@ -743,10 +708,10 @@ fun SettingsScreen(
         AlertDialog(
             onDismissRequest = { showRestoreConfirm = false },
             containerColor   = c.surfaceVar,
-            title = { Text("Restaurer la sauvegarde ?", color = c.textPrimary, fontWeight = FontWeight.Bold) },
+            title = { Text(ctx.getString(R.string.restore_title), color = c.textPrimary, fontWeight = FontWeight.Bold) },
             text  = {
                 Text(
-                    "Cette action remplacera vos favoris, liste blanche, numéros bloqués et paramètres actuels.",
+                    ctx.getString(R.string.restore_warning),
                     color = c.textSecond, fontSize = 14.sp
                 )
             },
@@ -757,19 +722,19 @@ fun SettingsScreen(
                     scope.launch {
                         val result = BackupManager.restoreBackup(ctx, uri)
                         backupMessage = when (result) {
-                            is BackupManager.RestoreResult.Success -> "✅ Restauration réussie — redémarrez l'app"
+                            is BackupManager.RestoreResult.Success -> ctx.getString(R.string.restore_ok)
                             is BackupManager.RestoreResult.Error   -> "❌ ${result.message}"
                         }
-                        if (result is BackupManager.RestoreResult.Success) vm.forceReload(ctx)
+                        vm.reloadAfterRestore(ctx)
                         pendingRestoreUri = null
                     }
                 }) {
-                    Text("Restaurer", color = c.neonOrange, fontWeight = FontWeight.Bold)
+                    Text(ctx.getString(R.string.restore), color = c.neonOrange, fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showRestoreConfirm = false; pendingRestoreUri = null }) {
-                    Text("Annuler", color = c.textSecond)
+                    Text(ctx.getString(R.string.cancel), color = c.textSecond)
                 }
             }
         )
@@ -786,12 +751,13 @@ private fun TimePickerDialog(
     initialHour: Int, initialMinute: Int,
     onConfirm: (Int, Int) -> Unit, onDismiss: () -> Unit
 ) {
+    val ctx = LocalContext.current
     val c     = LocalColors.current
     val state = rememberTimePickerState(initialHour = initialHour, initialMinute = initialMinute, is24Hour = true)
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor   = c.surfaceVar,
-        title = { Text("Choisir l'heure", color = c.neonCyan, fontWeight = FontWeight.Bold) },
+        title = { Text(ctx.getString(R.string.choose_time), color = c.neonCyan, fontWeight = FontWeight.Bold) },
         text  = {
             TimePicker(
                 state  = state,
@@ -809,7 +775,7 @@ private fun TimePickerDialog(
             )
         },
         confirmButton = { TextButton(onClick = { onConfirm(state.hour, state.minute) }) { Text("OK", color = c.neonCyan) } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Annuler", color = c.textSecond) } }
+        dismissButton = { TextButton(onClick = onDismiss) { Text(ctx.getString(R.string.cancel), color = c.textSecond) } }
     )
 }
 

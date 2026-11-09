@@ -7,6 +7,9 @@
 // the Free Software Foundation, either version 3 of the License.class Incomingsecondcalloverlay {
 package fr.bonobo.phonezen.ui.screens
 
+import androidx.compose.ui.res.stringResource
+import fr.bonobo.phonezen.R
+
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
@@ -110,7 +113,7 @@ private fun SecondCallCard(
         ) {
             // Indicateur visuel
             Text(
-                text = "Appel entrant",
+                text = stringResource(R.string.extra_incoming),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.primary,
                 fontWeight = FontWeight.SemiBold
@@ -146,8 +149,8 @@ private fun SecondCallCard(
             ) {
                 // Refuser
                 CallActionButton(
-                    icon = { Icon(Icons.Rounded.CallEnd, contentDescription = "Refuser") },
-                    label = "Refuser",
+                    icon = { Icon(Icons.Rounded.CallEnd, contentDescription = stringResource(R.string.extra_decline)) },
+                    label = stringResource(R.string.extra_decline),
                     containerColor = MaterialTheme.colorScheme.errorContainer,
                     contentColor = MaterialTheme.colorScheme.onErrorContainer,
                     onClick = onDecline
@@ -155,8 +158,8 @@ private fun SecondCallCard(
 
                 // Rester sur l'appel 1
                 CallActionButton(
-                    icon = { Icon(Icons.Rounded.PhonePaused, contentDescription = "Rester") },
-                    label = "Rester",
+                    icon = { Icon(Icons.Rounded.PhonePaused, contentDescription = stringResource(R.string.extra_stay)) },
+                    label = stringResource(R.string.extra_stay),
                     containerColor = MaterialTheme.colorScheme.secondaryContainer,
                     contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
                     onClick = onStayOnFirstCall
@@ -164,8 +167,8 @@ private fun SecondCallCard(
 
                 // Répondre
                 CallActionButton(
-                    icon = { Icon(Icons.Rounded.Call, contentDescription = "Répondre") },
-                    label = "Répondre",
+                    icon = { Icon(Icons.Rounded.Call, contentDescription = stringResource(R.string.extra_answer)) },
+                    label = stringResource(R.string.extra_answer),
                     containerColor = Color(0xFF2E7D32), // vert accessible
                     contentColor = Color.White,
                     onClick = onAnswer

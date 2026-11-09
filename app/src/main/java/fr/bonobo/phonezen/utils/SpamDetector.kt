@@ -12,7 +12,7 @@ import org.json.JSONObject
 import android.util.Log
 import java.util.Calendar
 
-class SpamDetector(context: Context) {
+class SpamDetector(private val context: Context) {
 
     private val prefs                    = context.getSharedPreferences("phonezen_prefs", Context.MODE_PRIVATE)
     private val profileManager           = ProfileManager(context)
@@ -20,73 +20,91 @@ class SpamDetector(context: Context) {
         (context.applicationContext as PhoneZenApp).hospitalWhitelistManager
 
     companion object {
-        private val alwaysBlockPrefixes   = mutableListOf<String>()
-        private val telemarketingPrefixes = mutableListOf<String>()
-        private val alwaysBlockPatterns   = mutableListOf<Regex>()
-        private val neverBlock            = mutableListOf<String>()
-        private var isLoaded = false
+        // Données chargées une seule fois (lazy + thread-safe) - pour compatibilité
+        private val _alwaysBlockPrefixes   = mutableListOf<String>()
+        private val _telemarketingPrefixes = mutableListOf<String>()
+        private val _alwaysBlockPatterns   = mutableListOf<Regex>()
+        private val _neverBlock            = mutableListOf<String>()
+        private val legacyLoadLock = Any()
+        private var isLegacyLoaded = false
+        
+        // Accesseurs pour les listes (immutables une fois chargées)
+        val alwaysBlockPrefixes: List<String> get() = _alwaysBlockPrefixes.toList()
+        val telemarketingPrefixes: List<String> get() = _telemarketingPrefixes.toList()
+        val alwaysBlockPatterns: List<Regex> get() = _alwaysBlockPatterns.toList()
+        val neverBlock: List<String> get() = _neverBlock.toList()
 
         const val COMMUNITY_BLOCK_THRESHOLD = 10L
 
-        private fun loadJson(context: Context) {
-            if (isLoaded) return
-            try {
-                val json = context.assets.open("prefixes_blocked_fr.json")
-                    .bufferedReader().use { it.readText() }
-                val root = JSONObject(json)
-                alwaysBlockPrefixes.clear()
-                telemarketingPrefixes.clear()
-                alwaysBlockPatterns.clear()
-                neverBlock.clear()
+        /**
+         * Charge les données ARCEP depuis les assets (pour compatibilité avec l'ancien format).
+         * Thread-safe et idempotent.
+         */
+        fun loadLegacyJson(context: Context) {
+            synchronized(legacyLoadLock) {
+                if (isLegacyLoaded) return
+                try {
+                    val json = context.assets.open("prefixes_blocked_fr.json")
+                        .bufferedReader().use { it.readText() }
+                    val root = JSONObject(json)
+                    _alwaysBlockPrefixes.clear()
+                    _telemarketingPrefixes.clear()
+                    _alwaysBlockPatterns.clear()
+                    _neverBlock.clear()
 
-                root.optJSONObject("PRIORITY_1_SAFE_LIST")?.let { p1 ->
-                    p1.optJSONArray("numbers")?.let { arr ->
-                        for (i in 0 until arr.length()) neverBlock.add(arr.getString(i))
+                    root.optJSONObject("PRIORITY_1_SAFE_LIST")?.let { p1 ->
+                        p1.optJSONArray("numbers")?.let { arr ->
+                            for (i in 0 until arr.length()) _neverBlock.add(arr.getString(i))
+                        }
+                        p1.optJSONArray("prefixes_gratuits")?.let { arr ->
+                            for (i in 0 until arr.length()) _neverBlock.add(arr.getString(i))
+                        }
                     }
-                    p1.optJSONArray("prefixes_gratuits")?.let { arr ->
-                        for (i in 0 until arr.length()) neverBlock.add(arr.getString(i))
+                    root.optJSONObject("PRIORITY_2_NPV_ARCEP")?.let { p2 ->
+                        p2.optJSONArray("prefixes")?.let { arr ->
+                            for (i in 0 until arr.length()) _alwaysBlockPrefixes.add(arr.getString(i))
+                        }
                     }
-                }
-                root.optJSONObject("PRIORITY_2_NPV_ARCEP")?.let { p2 ->
-                    p2.optJSONArray("prefixes")?.let { arr ->
-                        for (i in 0 until arr.length()) alwaysBlockPrefixes.add(arr.getString(i))
+                    root.optJSONObject("PRIORITY_3_COMMERCIAL_FLOTTE")?.let { p3 ->
+                        p3.optJSONArray("prefixes")?.let { arr ->
+                            for (i in 0 until arr.length()) _telemarketingPrefixes.add(arr.getString(i))
+                        }
                     }
-                }
-                root.optJSONObject("PRIORITY_3_COMMERCIAL_FLOTTE")?.let { p3 ->
-                    p3.optJSONArray("prefixes")?.let { arr ->
-                        for (i in 0 until arr.length()) telemarketingPrefixes.add(arr.getString(i))
+                    root.optJSONArray("always_block_prefixes")?.let { arr ->
+                        for (i in 0 until arr.length()) _alwaysBlockPrefixes.add(arr.getString(i))
                     }
-                }
-                root.optJSONArray("always_block_prefixes")?.let { arr ->
-                    for (i in 0 until arr.length()) alwaysBlockPrefixes.add(arr.getString(i))
-                }
-                root.optJSONArray("telemarketing_prefixes")?.let { arr ->
-                    for (i in 0 until arr.length()) telemarketingPrefixes.add(arr.getString(i))
-                }
-                root.optJSONArray("always_block_patterns")?.let { arr ->
-                    for (i in 0 until arr.length()) alwaysBlockPatterns.add(Regex(arr.getString(i)))
-                }
-                root.optJSONArray("never_block")?.let { arr ->
-                    for (i in 0 until arr.length()) neverBlock.add(arr.getString(i))
-                }
+                    root.optJSONArray("telemarketing_prefixes")?.let { arr ->
+                        for (i in 0 until arr.length()) _telemarketingPrefixes.add(arr.getString(i))
+                    }
+                    root.optJSONArray("always_block_patterns")?.let { arr ->
+                        for (i in 0 until arr.length()) _alwaysBlockPatterns.add(Regex(arr.getString(i)))
+                    }
+                    root.optJSONArray("never_block")?.let { arr ->
+                        for (i in 0 until arr.length()) _neverBlock.add(arr.getString(i))
+                    }
 
-                isLoaded = true
-                Log.d("SpamDetector", "Base ARCEP chargée : " +
-                        "${alwaysBlockPrefixes.size} bloqués stricts, " +
-                        "${telemarketingPrefixes.size} télémarketing, " +
-                        "${neverBlock.size} protégés, " +
-                        "${alwaysBlockPatterns.size} patterns")
-            } catch (e: Exception) {
-                Log.e("SpamDetector", "Erreur assets: ${e.message}")
+                    isLegacyLoaded = true
+                    Log.d("SpamDetector", "Base ARCEP chargée (legacy) : " +
+                            "${_alwaysBlockPrefixes.size} bloqués stricts, " +
+                            "${_telemarketingPrefixes.size} télémarketing, " +
+                            "${_neverBlock.size} protégés, " +
+                            "${_alwaysBlockPatterns.size} patterns")
+                } catch (e: Exception) {
+                    Log.e("SpamDetector", "Erreur chargement assets legacy: ${e.message}")
+                }
             }
         }
     }
 
-    init { loadJson(context) }
+    init {
+        // Charger les données legacy si ce n'est pas déjà fait (pour compatibilité)
+        loadLegacyJson(context)
+    }
 
     private fun norm(number: String?): String = PhoneUtils.normalizeNumber(number)
 
-    fun analyze(rawNumber: String?, isContact: Boolean = false, isFavorite: Boolean = false): SpamResult {
+    fun analyze(rawNumber: String?, isContact: Boolean = false, isFavorite: Boolean = false,
+                region: String? = CountrySettings(context).defaultRegion()): SpamResult {
 
         // 1. Numéro masqué
         if (rawNumber.isNullOrBlank() || isAnonymous(rawNumber)) {
@@ -99,17 +117,18 @@ class SpamDetector(context: Context) {
             )
         }
 
-        val normalized = norm(rawNumber)
-        val local      = normalized
-        val intl       = toInternationalFormat(normalized)
+        val normalized = PhoneUtils.normalizeNumber(rawNumber, region)
+        val frenchLocal = InternationalNumbers.frenchLocal(rawNumber, region)
+        val local = frenchLocal ?: normalized
+        val intl = InternationalNumbers.e164(rawNumber, region).orEmpty()
 
         CrashHandler.lastAnalyzedNumber = local
         CrashHandler.lastAction         = "SpamDetector.analyze: $local"
 
         // 2. Whitelist santé — PRIORITÉ ABSOLUE
         CrashHandler.lastAction = "SpamDetector: whitelist santé FINESS"
-        if (hospitalWhitelistManager.isHospitalNumber(local) ||
-            hospitalWhitelistManager.isHospitalNumber(intl)) {
+        if (frenchLocal != null && prefs.getBoolean("hospital_whitelist_enabled", true) &&
+            (hospitalWhitelistManager.isHospitalNumber(local) || hospitalWhitelistManager.isHospitalNumber(intl))) {
             val name = hospitalWhitelistManager.getHospitalName(local)
                 ?: hospitalWhitelistManager.getHospitalName(intl)
                 ?: "Établissement de santé"
@@ -122,19 +141,33 @@ class SpamDetector(context: Context) {
 
         // 3. Liste blanche utilisateur
         CrashHandler.lastAction = "SpamDetector: liste blanche utilisateur"
-        if (getWhitelist().any { norm(it) == local || norm(it) == intl }) {
+        if (isWhitelisted(rawNumber.orEmpty(), region)) {
             return SpamResult(isSpam = false, reason = "Liste blanche", riskLevel = RiskLevel.NONE)
         }
 
-        // 4. Services d'urgence JSON
-        CrashHandler.lastAction = "SpamDetector: services urgence"
-        if (neverBlock.any { local == it || local == "0$it" || local.startsWith(it) }) {
+        // 4. Numéros d'urgence par pays (PRIORITÉ ABSOLUE)
+        CrashHandler.lastAction = "SpamDetector: numéros d'urgence par pays"
+        val countryCode = region?.take(2)?.uppercase() ?: "FR"
+        val countryRules = CountryRulesManager.loadRules(countryCode, context)
+        
+        if (countryRules.isEmergency(rawNumber.orEmpty())) {
+            return SpamResult(
+                isSpam = false,
+                reason = "Numéro d'urgence ($countryCode)",
+                riskLevel = RiskLevel.NONE
+            )
+        }
+        
+        // 4b. Services d'urgence JSON (compatibilité legacy)
+        CrashHandler.lastAction = "SpamDetector: services urgence legacy"
+        if (InternationalNumbers.isEmergency(rawNumber, region) ||
+            (frenchLocal != null && neverBlock.any { local == it || (it.length >= 4 && local.startsWith(it)) })) {
             return SpamResult(isSpam = false, reason = "Numéro protégé", riskLevel = RiskLevel.NONE)
         }
 
         // 5. Blocage communautaire
         CrashHandler.lastAction = "SpamDetector: blocage communautaire"
-        if (isCommunityBlocked(normalized)) {
+        if (isCommunityBlocked(normalized, region)) {
             return SpamResult(
                 isSpam    = true,
                 reason    = "Signalé par la communauté",
@@ -150,7 +183,7 @@ class SpamDetector(context: Context) {
 
         // 7. Profil de blocage
         CrashHandler.lastAction = "SpamDetector: profil de blocage"
-        val isProNumber     = profileManager.isProNumber(local)
+        val isProNumber     = frenchLocal != null && profileManager.isProNumber(frenchLocal)
         val profileDecision = profileManager.isAllowedByProfile(
             isContact   = isContact,
             isFavorite  = isFavorite,
@@ -174,28 +207,39 @@ class SpamDetector(context: Context) {
             }
         }
 
-        // 9. Spoofing
-        CrashHandler.lastAction = "SpamDetector: détection spoofing"
-        val digits = normalized.filter { it.isDigit() }
-        if (digits.length > 15) {
-            return SpamResult(isSpam = true, reason = "Numéro invalide (Spoofing)", riskLevel = RiskLevel.CRITICAL)
-        }
+        // An unparseable number alone is not evidence of spoofing. User profiles still apply.
 
-        // 10. Patterns regex
+        // 10. Patterns regex (legacy - seulement pour FR)
         CrashHandler.lastAction = "SpamDetector: patterns regex"
-        for (pattern in alwaysBlockPatterns) {
-            if (pattern.containsMatchIn(normalized)) {
-                return SpamResult(isSpam = true, reason = "Pattern suspect", riskLevel = RiskLevel.CRITICAL)
+        if (frenchLocal != null) {
+            for (pattern in alwaysBlockPatterns) {
+                if (pattern.containsMatchIn(local)) {
+                    return SpamResult(isSpam = true, reason = "Pattern suspect", riskLevel = RiskLevel.CRITICAL)
+                }
             }
         }
 
-        // 11. Préfixes ARCEP
-        CrashHandler.lastAction = "SpamDetector: préfixes ARCEP"
-        for (target in listOf(local, intl)) {
-            if (alwaysBlockPrefixes.any { target.startsWith(it) })
-                return SpamResult(isSpam = true, reason = "Numéro frauduleux connu (ARCEP)", riskLevel = RiskLevel.HIGH)
-            if (telemarketingPrefixes.any { target.startsWith(it) })
-                return SpamResult(isSpam = true, reason = "Démarchage commercial", riskLevel = RiskLevel.MEDIUM)
+        // 11. Préfixes par pays (NOUVEAU - remplace ARCEP)
+        CrashHandler.lastAction = "SpamDetector: préfixes par pays"
+        if (countryRules.shouldBlock(normalized)) {
+            return SpamResult(
+                isSpam = true,
+                reason = "Bloqué par règles $countryCode",
+                riskLevel = RiskLevel.HIGH
+            )
+        }
+        
+        // 11b. Préfixes ARCEP legacy (pour compatibilité avec l'ancien système)
+        CrashHandler.lastAction = "SpamDetector: préfixes ARCEP legacy"
+        if (frenchLocal != null) {
+            for (target in listOf(local, intl)) {
+                if (alwaysBlockPrefixes.any { target.startsWith(it) }) {
+                    return SpamResult(isSpam = true, reason = "Numéro frauduleux connu (ARCEP)", riskLevel = RiskLevel.HIGH)
+                }
+                if (telemarketingPrefixes.any { target.startsWith(it) }) {
+                    return SpamResult(isSpam = true, reason = "Démarchage commercial", riskLevel = RiskLevel.MEDIUM)
+                }
+            }
         }
 
         // 12. Horaires de blocage
@@ -228,38 +272,42 @@ class SpamDetector(context: Context) {
 
     fun removeCommunityBlocked(number: String) {
         val set = getCommunityBlockedNumbers().toMutableSet()
-        set.remove(norm(number))
+        set.removeAll { it == number || InternationalNumbers.matchesStored(number, it, CountrySettings(context).defaultRegion()) }
         prefs.edit().putStringSet("community_blocked", set).apply()
     }
 
-    fun isCommunityBlocked(number: String): Boolean {
+    fun isCommunityBlocked(number: String, region: String? = CountrySettings(context).defaultRegion()): Boolean {
         if (!isCommunityBlockEnabled()) return false
-        val n = norm(number)
-        return getCommunityBlockedNumbers().any { norm(it) == n }
+        return getCommunityBlockedNumbers().any { InternationalNumbers.matchesStored(number, it, region) }
     }
 
     // ─────────────────────────────────────────────
     // LISTE BLANCHE
     // ─────────────────────────────────────────────
     fun getWhitelist(): Set<String> =
-        prefs.getStringSet("whitelist", emptySet()) ?: emptySet()
+        prefs.getStringSet("whitelist", emptySet()).orEmpty().map {
+            InternationalNumbers.e164(it, "FR") ?: it
+        }.toSet()
 
     fun addToWhitelist(number: String) {
         val list = getWhitelist().toMutableSet()
-        list.add(norm(number))
+        val canonical = InternationalNumbers.e164(number, CountrySettings(context).defaultRegion())
+        if (canonical == null) {
+            android.widget.Toast.makeText(context, context.getString(fr.bonobo.phonezen.R.string.country_number_needed), android.widget.Toast.LENGTH_LONG).show()
+            return
+        }
+        list.add(canonical)
         prefs.edit().putStringSet("whitelist", list).apply()
     }
 
     fun removeFromWhitelist(number: String) {
         val list = getWhitelist().toMutableSet()
-        list.remove(norm(number))
+        list.removeAll { it == number || InternationalNumbers.matchesStored(number, it, CountrySettings(context).defaultRegion()) }
         prefs.edit().putStringSet("whitelist", list).apply()
     }
 
-    fun isWhitelisted(number: String): Boolean {
-        val n = norm(number)
-        return getWhitelist().any { norm(it) == n }
-    }
+    fun isWhitelisted(number: String, region: String? = CountrySettings(context).defaultRegion()): Boolean =
+        getWhitelist().any { InternationalNumbers.matchesStored(number, it, region) }
 
     // ─────────────────────────────────────────────
     // HORAIRES DE BLOCAGE
@@ -323,8 +371,4 @@ class SpamDetector(context: Context) {
                 n == "hidden" || n.contains("anonymous")
     }
 
-    private fun toInternationalFormat(num: String): String {
-        if (num.startsWith("0") && !num.startsWith("00")) return "+33" + num.substring(1)
-        return num
-    }
 }

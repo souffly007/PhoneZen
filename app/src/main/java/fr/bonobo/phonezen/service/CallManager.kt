@@ -8,6 +8,7 @@ import android.media.ToneGenerator
 import android.os.Handler
 import android.os.Looper
 import android.telecom.Call
+import android.telecom.CallEndpoint
 import android.telecom.CallAudioState
 import android.telecom.InCallService
 import android.telecom.VideoProfile
@@ -36,8 +37,6 @@ object CallManager {
     private var audioRoute   : AudioRoute = AudioRoute.EARPIECE
     private var isBtAvailable: Boolean    = false
 
-    private var lastToggleTime = 0L
-
     // ─── Résolution de l'appel courant ────────────────────────────────────────
 
     private fun resolveCurrentCall(): Call? =
@@ -48,12 +47,7 @@ object CallManager {
             }
             ?: calls.values.firstOrNull { it.state == Call.STATE_RINGING }
 
-    private fun callKey(call: Call): String =
-        call.details?.let { details ->
-            val number    = details.handle?.schemeSpecificPart ?: "unknown"
-            val timestamp = details.creationTimeMillis
-            "$number@$timestamp"
-        } ?: System.identityHashCode(call).toString()
+    private fun callKey(call: Call): String = System.identityHashCode(call).toString()
 
     // ─── API publique ─────────────────────────────────────────────────────────
 
@@ -73,7 +67,7 @@ object CallManager {
         CrashHandler.lastAnalyzedNumber = number
         CrashHandler.lastAction         = "CallManager.setCall: $number state=$status"
         refreshHoldState()
-        notify(resolveCurrentCall(), status)
+        notify(resolveCurrentCall(), resolveCurrentCall()?.let { fromState(it.state) } ?: status)
         notifyAudio()
         Log.d(TAG, "setCall [$key] état=${call.state} — map size=${calls.size}")
     }
@@ -129,6 +123,16 @@ object CallManager {
         }
         CrashHandler.lastAction = "CallManager.onAudioStateChanged: route=$audioRoute muted=$isMuted"
         Log.d(TAG, "onAudioStateChanged: isMuted=$isMuted route=$audioRoute btAvailable=$isBtAvailable")
+        notifyAudio()
+    }
+
+    @Synchronized
+    fun onEndpointChanged(endpoint: CallEndpoint) {
+        audioRoute = when (endpoint.endpointType) {
+            CallEndpoint.TYPE_SPEAKER -> AudioRoute.SPEAKER
+            CallEndpoint.TYPE_BLUETOOTH -> AudioRoute.BLUETOOTH
+            else -> AudioRoute.EARPIECE
+        }
         notifyAudio()
     }
 
@@ -213,12 +217,17 @@ object CallManager {
 
     fun answer() {
         CrashHandler.lastAction = "CallManager.answer"
-        resolveCurrentCall()?.answer(VideoProfile.STATE_AUDIO_ONLY)
+        calls.values.firstOrNull { it.state == Call.STATE_RINGING }?.answer(VideoProfile.STATE_AUDIO_ONLY)
     }
 
     fun reject() {
         CrashHandler.lastAction = "CallManager.reject"
         resolveCurrentCall()?.reject(false, null)
+    }
+
+    fun rejectRingingOrHangUp() {
+        val ringing = calls.values.firstOrNull { it.state == Call.STATE_RINGING }
+        if (ringing != null) ringing.reject(false, null) else hangUp()
     }
 
     fun hangUp() {
@@ -263,19 +272,20 @@ object CallManager {
     }
 
     fun setAudioRoute(route: AudioRoute) {
-        val now = System.currentTimeMillis()
-        if (now - lastToggleTime < 400) { Log.d(TAG, "setAudioRoute ignoré (trop rapide)"); return }
-        lastToggleTime = now
         val service = inCallService ?: run { Log.e(TAG, "setAudioRoute: inCallService null"); return }
-        val telecomRoute = when (route) {
-            AudioRoute.SPEAKER   -> CallAudioState.ROUTE_SPEAKER
-            AudioRoute.BLUETOOTH -> if (isBtAvailable) CallAudioState.ROUTE_BLUETOOTH
-                                    else CallAudioState.ROUTE_EARPIECE
-            AudioRoute.EARPIECE  -> CallAudioState.ROUTE_EARPIECE
-        }
+        val requestedRoute = if (route == AudioRoute.BLUETOOTH && !isBtAvailable)
+            AudioRoute.EARPIECE else route
         CrashHandler.lastAction = "CallManager.setAudioRoute: $route"
-        service.setAudioRoute(telecomRoute)
-        Log.d(TAG, "setAudioRoute envoyé: $route → telecom=$telecomRoute")
+        if (service is PhoneZenInCallService) service.requestAudioRoute(requestedRoute)
+        else {
+            @Suppress("DEPRECATION")
+            service.setAudioRoute(when (requestedRoute) {
+                AudioRoute.SPEAKER -> CallAudioState.ROUTE_SPEAKER
+                AudioRoute.BLUETOOTH -> CallAudioState.ROUTE_BLUETOOTH
+                AudioRoute.EARPIECE -> CallAudioState.ROUTE_EARPIECE
+            })
+        }
+        Log.d(TAG, "setAudioRoute envoyé: $requestedRoute")
     }
 
     fun toggleSpeaker() =
@@ -310,10 +320,10 @@ object CallManager {
     }
 
     private fun notify(call: Call?, status: CallStatus) =
-        listeners.forEach { it(call, status) }
+        listeners.toList().forEach { it(call, status) }
 
     private fun notifyAudio() =
-        audioListeners.forEach { it(isMuted, isOnHold, audioRoute, isBtAvailable) }
+        audioListeners.toList().forEach { it(isMuted, isOnHold, audioRoute, isBtAvailable) }
 
     fun fromState(state: Int): CallStatus = when (state) {
         Call.STATE_RINGING                        -> CallStatus.RINGING

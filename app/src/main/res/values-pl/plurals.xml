@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="selected_calls">
+        <item quantity="one">"Wybrano %1$d połączenie"</item>
+        <item quantity="few">"Wybrano %1$d połączenia"</item>
+        <item quantity="many">"Wybrano %1$d połączeń"</item>
+        <item quantity="other">"Wybrano %1$d połączenia"</item>
+    </plurals>
+    <plurals name="load_remaining">
+        <item quantity="one">"Wczytaj %1$d pozostały element"</item>
+        <item quantity="few">"Wczytaj %1$d pozostałe elementy"</item>
+        <item quantity="many">"Wczytaj %1$d pozostałych elementów"</item>
+        <item quantity="other">"Wczytaj %1$d pozostałego elementu"</item>
+    </plurals>
+    <plurals name="more_calls">
+        <item quantity="one">"… i jeszcze %1$d"</item>
+        <item quantity="few">"… i jeszcze %1$d"</item>
+        <item quantity="many">"… i jeszcze %1$d"</item>
+        <item quantity="other">"… i jeszcze %1$d"</item>
+    </plurals>
+    <plurals name="crash_reports">
+        <item quantity="one">"Dostępny %1$d raport"</item>
+        <item quantity="few">"Dostępne %1$d raporty"</item>
+        <item quantity="many">"Dostępnych %1$d raportów"</item>
+        <item quantity="other">"Dostępne %1$d raportu"</item>
+    </plurals>
+    <plurals name="protected_numbers">
+        <item quantity="one">"%1$d chroniony numer"</item>
+        <item quantity="few">"%1$d chronione numery"</item>
+        <item quantity="many">"%1$d chronionych numerów"</item>
+        <item quantity="other">"%1$d chronionego numeru"</item>
+    </plurals>
+    <plurals name="reported_numbers">
+        <item quantity="one">"%1$d numer zgłoszony przez społeczność"</item>
+        <item quantity="few">"%1$d numery zgłoszone przez społeczność"</item>
+        <item quantity="many">"%1$d numerów zgłoszonych przez społeczność"</item>
+        <item quantity="other">"%1$d numeru zgłoszonego przez społeczność"</item>
+    </plurals>
+    <plurals name="remaining_days">
+        <item quantity="one">"Pozostał %1$d dzień"</item>
+        <item quantity="few">"Pozostały %1$d dni"</item>
+        <item quantity="many">"Pozostało %1$d dni"</item>
+        <item quantity="other">"Pozostało %1$d dnia"</item>
+    </plurals>
+    <plurals name="duration_days">
+        <item quantity="one">"%1$d dzień"</item>
+        <item quantity="few">"%1$d dni"</item>
+        <item quantity="many">"%1$d dni"</item>
+        <item quantity="other">"%1$d dnia"</item>
+    </plurals>
+    <plurals name="report_count">
+        <item quantity="one">"%1$d zgłoszenie"</item>
+        <item quantity="few">"%1$d zgłoszenia"</item>
+        <item quantity="many">"%1$d zgłoszeń"</item>
+        <item quantity="other">"%1$d zgłoszenia"</item>
+    </plurals>
+</resources>
+

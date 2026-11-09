@@ -7,6 +7,12 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface BlockedNumberDao {
+    @Query("SELECT * FROM blocked_numbers")
+    suspend fun getAllOnce(): List<BlockedNumber>
+
+    @Query("DELETE FROM blocked_numbers")
+    suspend fun deleteAll()
+
 
     @Query("SELECT * FROM blocked_numbers ORDER BY timestamp DESC")
     fun getAll(): Flow<List<BlockedNumber>>

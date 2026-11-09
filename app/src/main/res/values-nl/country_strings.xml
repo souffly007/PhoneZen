@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="country_title">"🌍 Land en bescherming"</string>
+    <string name="country_default">"Terugvalland / contacten"</string>
+    <string name="country_manual">"Handmatig"</string>
+    <string name="country_unknown">"Niet bepaald"</string>
+    <string name="country_choose">"Land kiezen"</string>
+    <string name="country_no_lines">"Geen lijn beschikbaar. Controleer de telefoonmachtiging of kies een terugvalland."</string>
+    <string name="country_explanation">"Het land bepaalt hoe nummers zonder internationale landcode worden gelezen. Automatisch via SIM of handmatig, onafhankelijk van de taal. Het terugvalland geldt ook voor contacten."</string>
+    <string name="country_rules">"Algemene bescherming: lijsten, profielen en tijdschema’s. Franse filters gelden alleen voor als Frans herkende nummers; buitenlandse landcodes worden niet standaard geblokkeerd."</string>
+    <string name="country_number_needed">"Kies het land in Instellingen of gebruik een volledig nummer met + en landcode."</string>
+</resources>
+

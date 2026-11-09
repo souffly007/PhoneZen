@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="selected_calls">
+        <item quantity="other">"已选择 %1$d 项"</item>
+    </plurals>
+    <plurals name="load_remaining">
+        <item quantity="other">"加载剩余 %1$d 项"</item>
+    </plurals>
+    <plurals name="more_calls">
+        <item quantity="other">"…以及另外 %1$d 项"</item>
+    </plurals>
+    <plurals name="crash_reports">
+        <item quantity="other">"有 %1$d 份报告"</item>
+    </plurals>
+    <plurals name="protected_numbers">
+        <item quantity="other">"%1$d 个受保护号码"</item>
+    </plurals>
+    <plurals name="reported_numbers">
+        <item quantity="other">"社区已举报 %1$d 个号码"</item>
+    </plurals>
+    <plurals name="remaining_days">
+        <item quantity="other">"剩余 %1$d 天"</item>
+    </plurals>
+    <plurals name="duration_days">
+        <item quantity="other">"%1$d 天"</item>
+    </plurals>
+    <plurals name="report_count">
+        <item quantity="other">"%1$d 次举报"</item>
+    </plurals>
+</resources>

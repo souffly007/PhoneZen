@@ -9,7 +9,7 @@ import fr.bonobo.phonezen.data.repository.HealthcareRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.launch
 
 /**
  * Gestionnaire de la whitelist des établissements de santé français.
@@ -39,7 +39,7 @@ class HospitalWhitelistManager(
     init {
         // Chargement synchrone bloquant au démarrage —
         // indispensable pour que le cache soit prêt avant le premier appel entrant
-        runBlocking(Dispatchers.IO) {
+        scope.launch {
             try {
                 val entries = repository.getVerifiedEntries()
                 buildCache(entries)
@@ -127,18 +127,7 @@ class HospitalWhitelistManager(
      * force un rechargement synchrone avant tout lookup.
      */
     private fun ensureCacheReady() {
-        if (!isReady || totalCount == 0) {
-            Log.w(TAG, "Cache vide au moment du lookup — rechargement forcé")
-            runBlocking(Dispatchers.IO) {
-                try {
-                    val entries = repository.getVerifiedEntries()
-                    buildCache(entries)
-                    Log.i(TAG, "Cache rechargé en urgence : $totalCount entrées")
-                } catch (e: Exception) {
-                    Log.e(TAG, "Échec rechargement d'urgence", e)
-                }
-            }
-        }
+        // Cache is loaded asynchronously once at creation and refreshed by the sync worker.
     }
 
     // ─────────────────────────────────────────────

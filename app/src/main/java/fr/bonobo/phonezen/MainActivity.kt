@@ -175,6 +175,7 @@ class MainActivity : ComponentActivity() {
     // ══════════════════════════════════════════════════════════════
 
     fun launchCall(number: String) {
+        if (number.isBlank()) { fr.bonobo.phonezen.util.showVoicemailSettings(this); return }
         Log.d("MainActivity", "launchCall: $number")
         try {
             cacheContactName(number)
@@ -203,6 +204,7 @@ class MainActivity : ComponentActivity() {
 
     @SuppressLint("MissingPermission")
     fun launchCallWithSim(number: String, subscriptionId: Int) {
+        if (number.isBlank()) { fr.bonobo.phonezen.util.showVoicemailSettings(this); return }
         Log.d("MainActivity", "launchCallWithSim: $number sur SIM $subscriptionId")
         cacheContactName(number)
 
@@ -225,28 +227,40 @@ class MainActivity : ComponentActivity() {
                 moveTaskToBack(true)
                 Log.d("MainActivity", "Appel via SIM $subscriptionId lancé")
             } else {
-                Log.w("MainActivity", "PhoneAccountHandle non trouvé pour SIM $subscriptionId")
-                launchCall(number)
+                Log.w("MainActivity", "Compte téléphonique à confirmer")
+                choosePhoneAccount(number)
             }
         } catch (e: Exception) {
             Log.e("MainActivity", "Erreur appel SIM spécifique: ${e.message}")
-            launchCall(number)
+            choosePhoneAccount(number)
         }
     }
 
-    @SuppressLint("MissingPermission")
-    private fun getPhoneAccountHandle(subscriptionId: Int): PhoneAccountHandle? {
-        return try {
-            val telecomManager = getSystemService(Context.TELECOM_SERVICE) as TelecomManager
-            telecomManager.callCapablePhoneAccounts?.firstOrNull { handle ->
-                val account = telecomManager.getPhoneAccount(handle)
-                val extras  = account?.extras
-                val subId   = extras?.getInt("android.telecom.extra.SUBSCRIPTION_ID", -1) ?: -1
-                subId == subscriptionId
+    private fun getPhoneAccountHandle(subscriptionId: Int): PhoneAccountHandle? =
+        fr.bonobo.phonezen.util.findPhoneAccount(this, subscriptionId)
+
+    private fun choosePhoneAccount(number: String) {
+        try {
+            val telecom = getSystemService(TELECOM_SERVICE) as TelecomManager
+            val accounts = telecom.callCapablePhoneAccounts
+            if (accounts.isEmpty()) {
+                android.widget.Toast.makeText(this, "Aucune ligne disponible", android.widget.Toast.LENGTH_LONG).show()
+                return
             }
-        } catch (e: Exception) {
-            Log.e("MainActivity", "Erreur getPhoneAccountHandle: ${e.message}")
-            null
+            android.app.AlertDialog.Builder(this)
+                .setTitle("Confirmer la ligne à utiliser")
+                .setItems(accounts.map { telecom.getPhoneAccount(it)?.label?.toString() ?: "Ligne" }.toTypedArray()) { _, index ->
+                    try {
+                        telecom.placeCall(Uri.fromParts("tel", number, null), Bundle().apply {
+                            putParcelable(TelecomManager.EXTRA_PHONE_ACCOUNT_HANDLE, accounts[index])
+                        })
+                        moveTaskToBack(true)
+                    } catch (_: Exception) {
+                        android.widget.Toast.makeText(this, "Impossible d’appeler sur cette ligne", android.widget.Toast.LENGTH_LONG).show()
+                    }
+                }.setNegativeButton("Annuler", null).show()
+        } catch (_: Exception) {
+            android.widget.Toast.makeText(this, "Autorisez l’accès Téléphone pour choisir la SIM", android.widget.Toast.LENGTH_LONG).show()
         }
     }
 
@@ -256,7 +270,7 @@ class MainActivity : ComponentActivity() {
 
     private fun cacheContactName(number: String) {
         if (ContactCache.get(number) != null) return
-        val name = lookupContactName(number)
+        val name = runCatching { lookupContactName(number) }.getOrNull()
         if (name != null) {
             ContactCache.put(number, name)
             Log.d("MainActivity", "Contact mis en cache: $name → $number")
@@ -293,20 +307,16 @@ class MainActivity : ComponentActivity() {
     // ══════════════════════════════════════════════════════════════
 
     private fun launchVoicemail() {
-        val number = getVoicemailNumber()
-        Log.d("MainActivity", "Appel messagerie vocale: $number")
-        launchCall(number)
+        val sims = fr.bonobo.phonezen.util.getActiveSims(this)
+        if (sims.isEmpty()) { fr.bonobo.phonezen.util.showVoicemailSettings(this); return }
+        if (sims.size == 1) fr.bonobo.phonezen.util.callVoicemail(this, sims.first(), ::launchCallWithSim)
+        else android.app.AlertDialog.Builder(this).setTitle("Quel répondeur appeler ?")
+            .setItems(sims.map { "${it.label} · ${it.carrierName}" }.toTypedArray()) { _, i ->
+                fr.bonobo.phonezen.util.callVoicemail(this, sims[i], ::launchCallWithSim)
+            }.show()
     }
 
-    private fun getVoicemailNumber(): String {
-        getSystemVoicemailNumber()?.let { return it }
-        val carrier = getCarrierName()?.lowercase()?.trim() ?: return "123"
-        VOICEMAIL_NUMBERS[carrier]?.let { return it }
-        VOICEMAIL_NUMBERS.entries.find { (key, _) ->
-            carrier.contains(key) || key.contains(carrier)
-        }?.let { return it.value }
-        return "123"
-    }
+    private fun getVoicemailNumber(): String = fr.bonobo.phonezen.util.getVoicemailNumber(this)
 
     private fun getSystemVoicemailNumber(): String? {
         return try {
@@ -352,8 +362,8 @@ class MainActivity : ComponentActivity() {
             isDialerGranted    = roleManager.isRoleHeld(RoleManager.ROLE_DIALER)
             isScreeningGranted = roleManager.isRoleHeld(RoleManager.ROLE_CALL_SCREENING)
         } else {
-            isDialerGranted    = true
-            isScreeningGranted = true
+            isDialerGranted = (getSystemService(TELECOM_SERVICE) as TelecomManager).defaultDialerPackage == packageName
+            isScreeningGranted = isDialerGranted
         }
 
         Log.d("MainActivity", "refreshRoleStates → dialer=$isDialerGranted " +
@@ -398,7 +408,12 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun requestDialerRole() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            roleLauncher.launch(Intent(TelecomManager.ACTION_CHANGE_DEFAULT_DIALER).apply {
+                putExtra(TelecomManager.EXTRA_CHANGE_DEFAULT_DIALER_PACKAGE_NAME, packageName)
+            })
+            return
+        }
         val roleManager = getSystemService(Context.ROLE_SERVICE) as RoleManager
         if (!roleManager.isRoleHeld(RoleManager.ROLE_DIALER)) {
             Log.d("MainActivity", "Demande du rôle DIALER")
@@ -407,7 +422,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun requestScreeningRole() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) { requestDialerRole(); return }
         val roleManager = getSystemService(Context.ROLE_SERVICE) as RoleManager
         if (!roleManager.isRoleHeld(RoleManager.ROLE_CALL_SCREENING)) {
             Log.d("MainActivity", "Demande du rôle CALL_SCREENING")
@@ -425,7 +440,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun rolesReady(): Boolean {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return true
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return (getSystemService(TELECOM_SERVICE) as TelecomManager).defaultDialerPackage == packageName
         val roleManager = getSystemService(Context.ROLE_SERVICE) as RoleManager
         return roleManager.isRoleHeld(RoleManager.ROLE_DIALER)
     }
@@ -454,35 +469,4 @@ class MainActivity : ComponentActivity() {
     // CONSTANTES
     // ══════════════════════════════════════════════════════════════
 
-    companion object {
-        private val VOICEMAIL_NUMBERS = mapOf(
-            "orange"               to "888",
-            "sosh"                 to "888",
-            "sfr"                  to "123",
-            "red"                  to "123",
-            "red by sfr"           to "123",
-            "bouygues"             to "660",
-            "bouygues telecom"     to "660",
-            "b&you"                to "660",
-            "free"                 to "666",
-            "free mobile"          to "666",
-            "syma"                 to "888",
-            "syma mobile"          to "888",
-            "youprice"             to "888",
-            "la poste mobile"      to "123",
-            "la poste"             to "123",
-            "prixtel"              to "123",
-            "coriolis"             to "123",
-            "réglo mobile"         to "123",
-            "réglo"                to "123",
-            "nrj mobile"           to "660",
-            "nrj"                  to "660",
-            "cic mobile"           to "660",
-            "crédit mutuel mobile" to "660",
-            "auchan telecom"       to "660",
-            "cdiscount mobile"     to "660",
-            "lebara"               to "5765",
-            "lycamobile"           to "121"
-        )
-    }
 }

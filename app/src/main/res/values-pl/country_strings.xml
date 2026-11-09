@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="country_title">"🌍 Kraj i ochrona"</string>
+    <string name="country_default">"Kraj zapasowy / kontakty"</string>
+    <string name="country_manual">"Ręcznie"</string>
+    <string name="country_unknown">"Nieokreślony"</string>
+    <string name="country_choose">"Wybierz kraj"</string>
+    <string name="country_no_lines">"Brak dostępnej linii. Sprawdź uprawnienie Telefon lub wybierz kraj zapasowy."</string>
+    <string name="country_explanation">"Kraj służy do rozpoznawania numerów bez prefiksu międzynarodowego. Wykrywanie z SIM lub wybór ręczny, niezależnie od języka. Kraj zapasowy dotyczy też kontaktów."</string>
+    <string name="country_rules">"Ochrona ogólna: listy, profile i harmonogramy. Francuskie filtry dotyczą tylko numerów rozpoznanych jako francuskie; zagraniczne prefiksy nie są domyślnie blokowane."</string>
+    <string name="country_number_needed">"Wybierz kraj w Ustawieniach lub użyj pełnego numeru z + i kodem kraju."</string>
+</resources>
+

@@ -5,3 +5,7 @@
 local.properties
 app/release/
 .idea/
+*.apk
+*.aab
+*.jks
+*.keystore

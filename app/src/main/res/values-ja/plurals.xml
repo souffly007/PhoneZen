@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="selected_calls">
+        <item quantity="other">"%1$d件選択中"</item>
+    </plurals>
+    <plurals name="load_remaining">
+        <item quantity="other">"残り%1$d件を読み込む"</item>
+    </plurals>
+    <plurals name="more_calls">
+        <item quantity="other">"…ほか%1$d件"</item>
+    </plurals>
+    <plurals name="crash_reports">
+        <item quantity="other">"%1$d件のレポートがあります"</item>
+    </plurals>
+    <plurals name="protected_numbers">
+        <item quantity="other">"%1$d件の保護された番号"</item>
+    </plurals>
+    <plurals name="reported_numbers">
+        <item quantity="other">"コミュニティが報告した番号：%1$d件"</item>
+    </plurals>
+    <plurals name="remaining_days">
+        <item quantity="other">"残り%1$d日"</item>
+    </plurals>
+    <plurals name="duration_days">
+        <item quantity="other">"%1$d日"</item>
+    </plurals>
+    <plurals name="report_count">
+        <item quantity="other">"%1$d件の報告"</item>
+    </plurals>
+</resources>
+

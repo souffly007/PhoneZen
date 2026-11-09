@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="country_title">"🌍 البلد والحماية"</string>
+    <string name="country_default">"البلد الاحتياطي / جهات الاتصال"</string>
+    <string name="country_manual">"يدوي"</string>
+    <string name="country_unknown">"غير محدد"</string>
+    <string name="country_choose">"اختر بلدًا"</string>
+    <string name="country_no_lines">"لا يوجد خط متاح. تحقق من إذن الهاتف أو اختر بلدًا احتياطيًا."</string>
+    <string name="country_explanation">"يحدد البلد الأرقام التي لا تحتوي على رمز دولي. اكتشاف من الشريحة أو اختيار يدوي مستقل عن اللغة. يُستخدم البلد الاحتياطي أيضًا لجهات الاتصال."</string>
+    <string name="country_rules">"حماية عامة: القوائم والملفات والجداول. تُطبق المرشحات الفرنسية فقط على الأرقام المحددة كفرنسية؛ لا تُحظر البادئات الأجنبية افتراضيًا."</string>
+    <string name="country_number_needed">"اختر البلد في الإعدادات أو استخدم رقمًا كاملًا مع + ورمز البلد."</string>
+</resources>
+

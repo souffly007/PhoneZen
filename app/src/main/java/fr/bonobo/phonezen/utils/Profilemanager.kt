@@ -12,8 +12,16 @@ class ProfileManager(context: Context) {
 
     private val prefs = context.getSharedPreferences("phonezen_prefs", Context.MODE_PRIVATE)
 
-    fun getActiveProfile(): BlockingProfile =
-        BlockingProfile.fromId(prefs.getString("profile_active", BlockingProfile.HOME.id) ?: BlockingProfile.HOME.id)
+    fun getActiveProfile(): BlockingProfile {
+        var active = BlockingProfile.fromId(prefs.getString("profile_active", BlockingProfile.HOME.id) ?: BlockingProfile.HOME.id)
+        val end = prefs.getLong("vacation_end_ts", -1L)
+        if (active == BlockingProfile.VACATION && end > 0 && System.currentTimeMillis() >= end) {
+            active = BlockingProfile.fromId(prefs.getString("vacation_return_profile", BlockingProfile.HOME.id) ?: BlockingProfile.HOME.id)
+            if (active == BlockingProfile.VACATION) active = BlockingProfile.HOME
+            prefs.edit().putString("profile_active", active.id).remove("vacation_end_ts").apply()
+        }
+        return active
+    }
 
     fun setActiveProfile(profile: BlockingProfile) =
         prefs.edit().putString("profile_active", profile.id).apply()

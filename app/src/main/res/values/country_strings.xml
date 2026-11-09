@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="country_title">"🌍 Pays et protection"</string>
+    <string name="country_default">"Pays de secours / contacts"</string>
+    <string name="country_manual">"Manuel"</string>
+    <string name="country_unknown">"Non déterminé"</string>
+    <string name="country_choose">"Choisir un pays"</string>
+    <string name="country_no_lines">"Aucune ligne accessible. Vérifiez la permission Téléphone ou choisissez un pays de secours."</string>
+    <string name="country_explanation">"Le pays sert à comprendre les numéros sans indicatif international. Détection par SIM ou choix manuel, indépendamment de la langue. Le pays de secours sert aussi aux contacts."</string>
+    <string name="country_rules">"Protection générique partout : listes, profils et horaires. Les filtres français restent limités aux numéros identifiés comme français ; aucun préfixe étranger n\'est bloqué par défaut."</string>
+    <string name="country_number_needed">"Choisissez le pays dans Réglages ou utilisez un numéro complet avec + et son indicatif international."</string>
+</resources>
+

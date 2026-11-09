@@ -1,5 +1,8 @@
 package fr.bonobo.phonezen.ui.screens
 
+import androidx.compose.ui.res.stringResource
+import fr.bonobo.phonezen.R
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -44,7 +47,7 @@ fun ThemeSelectorScreen(
                 Icon(Icons.Default.ArrowBack, null, tint = NeonCyan)
             }
             Text(
-                text       = "Thème",
+                text       = stringResource(R.string.extra_theme),
                 fontSize   = 22.sp,
                 fontWeight = FontWeight.Bold,
                 color      = NeonCyan,
@@ -57,7 +60,7 @@ fun ThemeSelectorScreen(
         // ── Carte Cyber Dark ──
         ThemeCard(
             label       = "Cyber Dark",
-            description = "Thème sombre haute contraste",
+            description = stringResource(R.string.extra_dark_desc),
             selected    = current == AppTheme.CYBER_DARK,
             preview     = {
                 CyberDarkPreview()
@@ -69,8 +72,8 @@ fun ThemeSelectorScreen(
 
         // ── Carte Zen Clair ──
         ThemeCard(
-            label       = "Zen Clair",
-            description = "Thème lumineux inspiré de l'icône",
+            label       = stringResource(R.string.extra_light),
+            description = stringResource(R.string.extra_light_desc),
             selected    = current == AppTheme.ZEN_LIGHT,
             preview     = {
                 ZenLightPreview()
@@ -83,7 +86,7 @@ fun ThemeSelectorScreen(
         // ── Carte Cyanogen ──
         ThemeCard(
             label       = "Cyanogen",
-            description = "Hommage à la ROM culte — noir profond & cyan électrique",
+            description = stringResource(R.string.extra_cyan_desc),
             selected    = current == AppTheme.CYANOGEN,
             preview     = {
                 CyanogenPreview()

@@ -17,9 +17,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import fr.bonobo.phonezen.R
 import fr.bonobo.phonezen.ui.theme.LocalColors
 import fr.bonobo.phonezen.viewmodel.MainViewModel
 import java.text.SimpleDateFormat
@@ -30,6 +33,7 @@ import fr.bonobo.phonezen.data.model.BlockedNumber
 @Composable
 fun BlockedNumbersScreen(vm: MainViewModel, onBack: () -> Unit) {
     val c = LocalColors.current
+    val ctx = LocalContext.current
     // ✅ Maintenant on observe la vraie liste noire
     val blockedList by vm.blockedNumbers.collectAsState()
 
@@ -39,7 +43,7 @@ fun BlockedNumbersScreen(vm: MainViewModel, onBack: () -> Unit) {
             TopAppBar(
                 title = {
                     Text(
-                        "LISTE NOIRE PERSONNELLE",
+                        stringResource(R.string.personal_blacklist),
                         fontSize = 18.sp,
                         fontWeight = FontWeight.ExtraBold,
                         color = c.neonRed
@@ -47,7 +51,7 @@ fun BlockedNumbersScreen(vm: MainViewModel, onBack: () -> Unit) {
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Retour", tint = c.textPrimary)
+                        Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.back), tint = c.textPrimary)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = c.background)
@@ -61,7 +65,7 @@ fun BlockedNumbersScreen(vm: MainViewModel, onBack: () -> Unit) {
                 .padding(horizontal = 16.dp)
         ) {
             Text(
-                "Ces numéros sont bloqués directement sur votre appareil.",
+                stringResource(R.string.personal_blacklist_description),
                 fontSize = 12.sp,
                 color = c.textSecond,
                 modifier = Modifier.padding(bottom = 16.dp)
@@ -72,7 +76,7 @@ fun BlockedNumbersScreen(vm: MainViewModel, onBack: () -> Unit) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(Icons.Default.Shield, null, modifier = Modifier.size(48.dp), tint = c.textSecond.copy(0.3f))
                         Spacer(Modifier.height(8.dp))
-                        Text("Aucun numéro bloqué", color = c.textSecond)
+                        Text(stringResource(R.string.no_blocked_numbers), color = c.textSecond)
                     }
                 }
             } else {
@@ -99,7 +103,7 @@ fun BlockedNumbersScreen(vm: MainViewModel, onBack: () -> Unit) {
 fun BlockedNumberRow(blocked: BlockedNumber, onDelete: () -> Unit) {
     val c = LocalColors.current
     val date = remember(blocked.timestamp) {
-        SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.FRANCE).format(Date(blocked.timestamp))
+        SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()).format(Date(blocked.timestamp))
     }
 
     Surface(
@@ -149,7 +153,7 @@ fun BlockedNumberRow(blocked: BlockedNumber, onDelete: () -> Unit) {
             IconButton(onClick = onDelete) {
                 Icon(
                     imageVector = Icons.Default.Delete,
-                    contentDescription = "Débloquer",
+                    contentDescription = stringResource(R.string.unblock),
                     tint = c.neonRed
                 )
             }

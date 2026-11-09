@@ -8,9 +8,11 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.PixelFormat
 import android.os.IBinder
+import android.os.Build
 import android.util.Log
 import android.view.Gravity
 import android.view.WindowManager
+import android.view.WindowInsets
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -46,7 +48,7 @@ import fr.bonobo.phonezen.utils.ContactResolver
 class CallOverlayService : Service(),
     LifecycleOwner,
     ViewModelStoreOwner,
-    SavedStateRegistryOwner {
+    SavedStateRegistryOwner, fr.bonobo.phonezen.ui.screens.CallOverlayControls {
 
     companion object {
         private const val TAG = "CallOverlayService"
@@ -80,14 +82,14 @@ class CallOverlayService : Service(),
     private var overlayView   : ComposeView?     = null
     private var windowManager : WindowManager?   = null
 
-    var callerName   by mutableStateOf("")
-    var callerNumber by mutableStateOf("")
-    var callStatus   by mutableStateOf(CallStatus.RINGING)
+    override var callerName   by mutableStateOf("")
+    override var callerNumber by mutableStateOf("")
+    override var callStatus   by mutableStateOf(CallStatus.RINGING)
 
     private val callListener: (android.telecom.Call?, CallStatus) -> Unit = { call, status ->
         callStatus   = status
         callerNumber = call?.details?.handle?.schemeSpecificPart ?: callerNumber
-        if (status == CallStatus.DISCONNECTED || status == CallStatus.IDLE) {
+        if (CallManager.getCallCount() == 0) {
             Log.d(TAG, "Appel terminé → arrêt du service overlay")
             stopSelf()
         }
@@ -110,7 +112,7 @@ class CallOverlayService : Service(),
 
         callerNumber = number
         callerName   = ContactResolver.resolveName(this, number) ?: number
-        callStatus   = CallStatus.RINGING
+        callStatus   = CallManager.getCall()?.let { CallManager.fromState(it.state) } ?: CallStatus.IDLE
 
         CallManager.addListener(callListener)
         showOverlay(mode)
@@ -150,6 +152,7 @@ class CallOverlayService : Service(),
             PixelFormat.TRANSLUCENT
         ).apply {
             this.gravity = gravity
+            this.y = (8 * resources.displayMetrics.density).toInt()
         }
 
         val view = ComposeView(this).apply {
@@ -175,6 +178,15 @@ class CallOverlayService : Service(),
         overlayView = view
         try {
             windowManager?.addView(view, params)
+            view.post {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    view.rootWindowInsets?.getInsets(WindowInsets.Type.statusBars() or WindowInsets.Type.navigationBars())?.let { bars ->
+                        params.y = (if (mode == CallPopupMode.MINI) bars.top else bars.bottom) +
+                                (8 * resources.displayMetrics.density).toInt()
+                        windowManager?.updateViewLayout(view, params)
+                    }
+                }
+            }
             Log.d(TAG, "Overlay $mode affiché")
         } catch (e: Exception) {
             Log.e(TAG, "Erreur addView: ${e.message}")
@@ -192,16 +204,17 @@ class CallOverlayService : Service(),
     fun expandToFullScreen() {
         val intent = fr.bonobo.phonezen.ui.screens.InCallActivity
             .getLaunchIntent(this)
-            .apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
+            .apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); putExtra("force_fullscreen", true) }
         startActivity(intent)
+        stopSelf()
     }
 
     /** Répondre à l'appel depuis l'overlay */
-    fun answer() {
+    override fun answer() {
         CallManager.answer()
         expandToFullScreen()
     }
 
     /** Refuser/Raccrocher depuis l'overlay */
-    fun reject() = CallManager.hangUp()
+    override fun reject() = CallManager.rejectRingingOrHangUp()
 }

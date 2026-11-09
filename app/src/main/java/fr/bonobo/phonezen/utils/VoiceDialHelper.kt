@@ -11,6 +11,22 @@ object VoiceDialHelper {
 
     // Préfixes vocaux reconnus (ordre important : les plus longs en premier)
     private val PREFIXES = listOf(
+        "call ",
+        "dial ",
+        "phone ",
+        "llama a ",
+        "llamar a ",
+        "llama ",
+        "llamar ",
+        "rufe ",
+        "ruf ",
+        "chiama ",
+        "chiamare ",
+        "ligar para ",
+        "ligue para ",
+        "liga para ",
+        "bel ",
+        "bellen naar ",
         "appelle-moi ",
         "appelez ",
         "appeler ",
@@ -21,7 +37,7 @@ object VoiceDialHelper {
         "composez le ",
         "appelle le ",
         "appeler le ",
-    )
+    ).sortedByDescending { it.length }
 
     /**
      * Extrait le nom (ou numéro) depuis une commande vocale.
@@ -31,12 +47,16 @@ object VoiceDialHelper {
      */
     fun parseCommand(rawText: String): String? {
         val text = rawText.trim()
-        val lower = text.lowercase()
+        val lower = text.lowercase(java.util.Locale.ROOT)
 
         // Cherche un préfixe connu
         for (prefix in PREFIXES) {
             if (lower.startsWith(prefix)) {
-                val result = text.substring(prefix.length).trim()
+                var result = text.substring(prefix.length).trim()
+                // German uses a separable verb: “Rufe Anna an”.
+                if ((prefix == "rufe " || prefix == "ruf ") && result.endsWith(" an", ignoreCase = true)) {
+                    result = result.dropLast(3).trim()
+                }
                 return result.ifEmpty { null }
             }
         }

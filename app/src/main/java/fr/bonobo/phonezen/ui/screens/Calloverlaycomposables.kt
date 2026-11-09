@@ -3,6 +3,9 @@
 // This file is part of PhoneZen.
 package fr.bonobo.phonezen.ui.screens
 
+import androidx.compose.ui.res.stringResource
+import fr.bonobo.phonezen.R
+
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -46,6 +49,14 @@ import androidx.compose.ui.unit.sp
 import fr.bonobo.phonezen.data.model.CallStatus
 import fr.bonobo.phonezen.service.CallOverlayService
 
+interface CallOverlayControls {
+    val callerName: String
+    val callerNumber: String
+    val callStatus: CallStatus
+    fun answer()
+    fun reject()
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Mode COMPACT — carte en bas de l'écran (~120dp)
 //
@@ -57,7 +68,7 @@ import fr.bonobo.phonezen.service.CallOverlayService
 
 @Composable
 fun CompactCallOverlay(
-    service  : CallOverlayService,
+    service  : CallOverlayControls,
     onExpand : () -> Unit
 ) {
     val neonGreen = Color(0xFF22C55E)
@@ -79,9 +90,9 @@ fun CompactCallOverlay(
         else               -> Color.LightGray
     }
     val statusText = when (service.callStatus) {
-        CallStatus.RINGING -> "Appel entrant..."
-        CallStatus.DIALING -> "Appel en cours..."
-        CallStatus.ACTIVE  -> "En communication"
+        CallStatus.RINGING -> stringResource(R.string.extra_incoming_progress)
+        CallStatus.DIALING -> stringResource(R.string.extra_dialing)
+        CallStatus.ACTIVE  -> stringResource(R.string.extra_active)
         else               -> ""
     }
 
@@ -158,7 +169,7 @@ fun CompactCallOverlay(
                     onClick  = { service.reject() },
                     modifier = Modifier.size(44.dp).background(neonRed, CircleShape)
                 ) {
-                    Icon(Icons.Default.CallEnd, "Refuser", tint = Color.White, modifier = Modifier.size(22.dp))
+                    Icon(Icons.Default.CallEnd, stringResource(R.string.extra_decline), tint = Color.White, modifier = Modifier.size(22.dp))
                 }
 
                 // Répondre (seulement si RINGING)
@@ -167,7 +178,7 @@ fun CompactCallOverlay(
                         onClick  = { service.answer() },
                         modifier = Modifier.size(44.dp).background(neonGreen, CircleShape)
                     ) {
-                        Icon(Icons.Default.Call, "Répondre", tint = Color.White, modifier = Modifier.size(22.dp))
+                        Icon(Icons.Default.Call, stringResource(R.string.extra_answer), tint = Color.White, modifier = Modifier.size(22.dp))
                     }
                 }
 
@@ -178,7 +189,7 @@ fun CompactCallOverlay(
                         .size(44.dp)
                         .background(Color.White.copy(alpha = 0.1f), CircleShape)
                 ) {
-                    Icon(Icons.Default.OpenInFull, "Agrandir", tint = neonCyan, modifier = Modifier.size(18.dp))
+                    Icon(Icons.Default.OpenInFull, stringResource(R.string.extra_expand), tint = neonCyan, modifier = Modifier.size(18.dp))
                 }
             }
         }
@@ -195,7 +206,7 @@ fun CompactCallOverlay(
 
 @Composable
 fun MiniCallOverlay(
-    service  : CallOverlayService,
+    service  : CallOverlayControls,
     onExpand : () -> Unit
 ) {
     val neonGreen = Color(0xFF22C55E)
@@ -243,9 +254,9 @@ fun MiniCallOverlay(
                     append(service.callerName.ifBlank { service.callerNumber })
                     append(" · ")
                     append(when (service.callStatus) {
-                        CallStatus.RINGING -> "Appel entrant"
-                        CallStatus.ACTIVE  -> "En communication"
-                        else               -> "Appel"
+                        CallStatus.RINGING -> stringResource(R.string.extra_incoming)
+                        CallStatus.ACTIVE  -> stringResource(R.string.extra_active)
+                        else               -> stringResource(R.string.extra_call)
                     })
                 },
                 fontSize  = 13.sp,
@@ -260,13 +271,13 @@ fun MiniCallOverlay(
             // Refuser
             Box(
                 modifier         = Modifier
-                    .size(32.dp)
+                    .size(48.dp)
                     .clip(CircleShape)
                     .background(neonRed)
                     .clickable { service.reject() },
                 contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Default.CallEnd, "Refuser", tint = Color.White, modifier = Modifier.size(16.dp))
+                Icon(Icons.Default.CallEnd, stringResource(R.string.extra_decline), tint = Color.White, modifier = Modifier.size(16.dp))
             }
 
             // Répondre (seulement si RINGING)
@@ -274,13 +285,13 @@ fun MiniCallOverlay(
                 Spacer(Modifier.width(6.dp))
                 Box(
                     modifier         = Modifier
-                        .size(32.dp)
+                        .size(48.dp)
                         .clip(CircleShape)
                         .background(neonGreen)
                         .clickable { service.answer() },
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.Default.Call, "Répondre", tint = Color.White, modifier = Modifier.size(16.dp))
+                    Icon(Icons.Default.Call, stringResource(R.string.extra_answer), tint = Color.White, modifier = Modifier.size(16.dp))
                 }
             }
         }

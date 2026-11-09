@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="notif_driving_title">"Modalità guida"</string>
+    <string name="notif_driving_desc">"Rilevamento automatico della modalità guida"</string>
+    <string name="notif_driving_detecting">"Rilevamento in corso…"</string>
+    <string name="notif_call_ongoing">"Chiamata in corso"</string>
+    <string name="notif_phone_call">"Chiamata telefonica"</string>
+    <string name="notif_open">"Apri"</string>
+    <string name="notif_active_channel">"Chiamate attive"</string>
+    <string name="notif_active_desc">"Indica che PhoneZen gestisce la chiamata attuale"</string>
+    <string name="notif_blocked_channel">"Sicurezza (spam)"</string>
+    <string name="notif_blocked_desc">"Notifiche dei numeri bloccati da PhoneZen"</string>
+    <string name="notif_voicemail_channel">"Segreteria telefonica"</string>
+    <string name="notif_voicemail_desc">"Notifiche della segreteria telefonica"</string>
+</resources>
+

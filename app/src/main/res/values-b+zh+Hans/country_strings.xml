@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="country_title">"🌍 国家与防护"</string>
+    <string name="country_default">"备用国家 / 联系人"</string>
+    <string name="country_manual">"手动"</string>
+    <string name="country_unknown">"未确定"</string>
+    <string name="country_choose">"选择国家"</string>
+    <string name="country_no_lines">"没有可用线路。请检查电话权限或选择备用国家。"</string>
+    <string name="country_explanation">"国家用于识别未带国际区号的号码。可从 SIM 卡检测或手动选择，与语言无关。备用国家也用于联系人。"</string>
+    <string name="country_rules">"通用防护：名单、模式和时段。法国规则仅适用于已识别的法国号码，默认不拦截外国号码前缀。"</string>
+    <string name="country_number_needed">"请在设置中选择国家，或使用包含 + 和国家区号的完整号码。"</string>
+</resources>
+

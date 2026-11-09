@@ -8,8 +8,6 @@
 ![Version](https://img.shields.io/badge/Version-1.2-cyan)
 
 ---
-![Journal des appels PhoneZen](PhoneZen-Journal-demo.png)
----
 
 ## 📸 Présentation
 

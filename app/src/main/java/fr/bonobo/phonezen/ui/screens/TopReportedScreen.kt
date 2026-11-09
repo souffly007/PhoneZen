@@ -1,5 +1,8 @@
 package fr.bonobo.phonezen.ui.screens
 
+import fr.bonobo.phonezen.R
+import androidx.compose.ui.platform.LocalContext
+
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -33,6 +36,7 @@ fun TopReportedScreen(
     onBack: () -> Unit = {}
 ) {
     val c           = LocalColors.current
+    val strings = LocalContext.current.resources
     var loading     by remember { mutableStateOf(true) }
     var numbers     by remember { mutableStateOf<List<ReportedNumber>>(emptyList()) }
     var refreshKey  by remember { mutableStateOf(0) }
@@ -55,13 +59,13 @@ fun TopReportedScreen(
             }
             Column(modifier = Modifier.weight(1f).padding(start = 4.dp)) {
                 Text(
-                    text       = "Numéros signalés",
+                    text       = strings.getString(R.string.reported_title),
                     fontSize   = 22.sp,
                     fontWeight = FontWeight.Bold,
                     color      = c.neonCyan
                 )
                 Text(
-                    text     = "Données communautaires · Expiration dynamique",
+                    text     = strings.getString(R.string.reported_summary),
                     fontSize = 11.sp,
                     color    = c.textSecond
                 )
@@ -77,7 +81,7 @@ fun TopReportedScreen(
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         CircularProgressIndicator(color = c.neonCyan)
                         Spacer(Modifier.height(12.dp))
-                        Text("Chargement…", fontSize = 13.sp, color = c.textSecond)
+                        Text(strings.getString(R.string.reported_loading), fontSize = 13.sp, color = c.textSecond)
                     }
                 }
             }
@@ -91,15 +95,15 @@ fun TopReportedScreen(
                             modifier = Modifier.size(64.dp)
                         )
                         Spacer(Modifier.height(12.dp))
-                        Text("Aucun numéro signalé", fontSize = 16.sp, color = c.textSecond, fontWeight = FontWeight.Medium)
-                        Text("La communauté n'a rien signalé pour l'instant", fontSize = 13.sp, color = c.textSecond.copy(alpha = 0.7f))
+                        Text(strings.getString(R.string.reported_empty), fontSize = 16.sp, color = c.textSecond, fontWeight = FontWeight.Medium)
+                        Text(strings.getString(R.string.reported_empty_summary), fontSize = 13.sp, color = c.textSecond.copy(alpha = 0.7f))
                     }
                 }
             }
 
             else -> {
                 Text(
-                    "${numbers.size} numéro(s) signalé(s) par la communauté",
+                    strings.getQuantityString(R.plurals.reported_numbers, numbers.size, numbers.size),
                     fontSize = 12.sp,
                     color    = c.textSecond,
                     modifier = Modifier.padding(start = 16.dp, top = 4.dp, bottom = 8.dp)
@@ -126,6 +130,7 @@ fun TopReportedScreen(
 @Composable
 private fun ReportedNumberCard(index: Int, reported: ReportedNumber) {
     val c = LocalColors.current
+    val strings = LocalContext.current.resources
 
     val rankColor = when (index) {
         0    -> c.neonRed
@@ -135,8 +140,8 @@ private fun ReportedNumberCard(index: Int, reported: ReportedNumber) {
     }
 
     // Calcul expiration
-    val expirationInfo = remember(reported.expiresAt) {
-        computeExpiration(reported.expiresAt, reported.reports)
+    val expirationInfo = remember(reported.expiresAt, reported.reports, strings.configuration.locales.toLanguageTags()) {
+        computeExpiration(reported.expiresAt, reported.reports, strings)
     }
 
     Card(
@@ -186,7 +191,7 @@ private fun ReportedNumberCard(index: Int, reported: ReportedNumber) {
                                     )
                                 ) {
                                     Text(
-                                        text     = tag,
+                                        text     = if (tag == "Indésirable") strings.getString(R.string.reported_unwanted) else tag,
                                         fontSize = 10.sp,
                                         color    = c.neonCyan,
                                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
@@ -205,7 +210,7 @@ private fun ReportedNumberCard(index: Int, reported: ReportedNumber) {
                         fontWeight = FontWeight.ExtraBold,
                         color      = rankColor
                     )
-                    Text(text = "signal.", fontSize = 10.sp, color = c.textSecond)
+                    Text(text = strings.getString(R.string.reported_short), fontSize = 10.sp, color = c.textSecond)
                 }
             }
 
@@ -224,6 +229,7 @@ private fun ReportedNumberCard(index: Int, reported: ReportedNumber) {
 @Composable
 private fun ExpirationBlock(info: ExpirationInfo) {
     val c = LocalColors.current
+    val strings = LocalContext.current.resources
 
     // Couleur de la barre selon le temps restant
     val barColor = when {
@@ -255,7 +261,7 @@ private fun ExpirationBlock(info: ExpirationInfo) {
                 )
                 Spacer(Modifier.width(4.dp))
                 Text(
-                    text     = "Expire le ${info.expiresDateFormatted}",
+                    text     = strings.getString(R.string.expires_date, info.expiresDateFormatted),
                     fontSize = 11.sp,
                     color    = c.textSecond
                 )
@@ -313,7 +319,7 @@ private data class ExpirationInfo(
     val totalDurationLabel   : String
 )
 
-private fun computeExpiration(expiresAt: String, reports: Long): ExpirationInfo? {
+private fun computeExpiration(expiresAt: String, reports: Long, strings: android.content.res.Resources): ExpirationInfo? {
     if (expiresAt.isBlank()) return null
 
     return try {
@@ -334,21 +340,21 @@ private fun computeExpiration(expiresAt: String, reports: Long): ExpirationInfo?
         val fraction = (daysRemaining.toFloat() / totalDays.toFloat()).coerceIn(0f, 1f)
 
         val formatter = DateTimeFormatter
-            .ofPattern("dd MMM yyyy", Locale.FRANCE)
+            .ofPattern("dd MMM yyyy", strings.configuration.locales[0])
             .withZone(ZoneId.systemDefault())
 
         val daysLabel = when {
-            daysRemaining == 0L  -> "Expire aujourd'hui"
-            daysRemaining == 1L  -> "1 jour restant"
-            daysRemaining <= 7L  -> "$daysRemaining jours restants"
-            else                 -> "$daysRemaining j. restants"
+            daysRemaining == 0L  -> strings.getString(R.string.expires_today)
+            else -> strings.getQuantityString(R.plurals.remaining_days, daysRemaining.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(), daysRemaining)
         }
 
         ExpirationInfo(
             expiresDateFormatted = formatter.format(expiresInstant),
             daysRemainingLabel   = daysLabel,
             fractionRemaining    = fraction,
-            totalDurationLabel   = "Durée totale : $totalDays jours · ${reports} signalement${if (reports > 1) "s" else ""}"
+            totalDurationLabel = strings.getString(R.string.expiration_total,
+                strings.getQuantityString(R.plurals.duration_days, totalDays.toInt(), totalDays),
+                strings.getQuantityString(R.plurals.report_count, reports.coerceIn(0L, Int.MAX_VALUE.toLong()).toInt(), reports))
         )
     } catch (e: Exception) {
         null

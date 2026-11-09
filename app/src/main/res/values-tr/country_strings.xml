@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="country_title">"🌍 Ülke ve koruma"</string>
+    <string name="country_default">"Yedek ülke / kişiler"</string>
+    <string name="country_manual">"Elle"</string>
+    <string name="country_unknown">"Belirlenemedi"</string>
+    <string name="country_choose">"Ülke seçin"</string>
+    <string name="country_no_lines">"Erişilebilir hat yok. Telefon iznini kontrol edin veya yedek ülke seçin."</string>
+    <string name="country_explanation">"Ülke, uluslararası kodu olmayan numaraları tanımlar. Dilden bağımsız olarak SIM algılama veya elle seçim kullanılır. Yedek ülke kişiler için de geçerlidir."</string>
+    <string name="country_rules">"Genel koruma: listeler, profiller ve zamanlamalar. Fransız filtreleri yalnızca Fransız olarak tanımlanan numaralara uygulanır; yabancı önekler varsayılan olarak engellenmez."</string>
+    <string name="country_number_needed">"Ayarlardan ülkeyi seçin veya + ve ülke koduyla tam numara kullanın."</string>
+</resources>
+

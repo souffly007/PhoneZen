@@ -18,31 +18,21 @@ class BlockedNumberRepository(private val dao: BlockedNumberDao) {
     fun getAll(): Flow<List<BlockedNumber>> = dao.getAll()
 
     suspend fun isBlocked(rawNumber: String): Boolean {
-        val normalized = PhoneUtils.normalizeNumber(rawNumber)
-        // Vérifie les deux formats : local (0X) et international (+33X)
-        val local = if (normalized.startsWith("+33"))
-            "0" + normalized.substring(3) else normalized
-        val intl  = if (normalized.startsWith("0"))
-            "+33" + normalized.substring(1) else normalized
-        return dao.isBlocked(local) > 0 || dao.isBlocked(intl) > 0
+        return dao.getAllOnce().any {
+            fr.bonobo.phonezen.utils.InternationalNumbers.matchesStored(rawNumber, it.number, PhoneUtils.regionProvider())
+        }
     }
 
     suspend fun insert(rawNumber: String, label: String = "") {
-        val normalized = PhoneUtils.normalizeNumber(rawNumber)
+        val normalized = fr.bonobo.phonezen.utils.InternationalNumbers.e164(rawNumber, PhoneUtils.regionProvider()) ?: return
         dao.insert(BlockedNumber(number = normalized, label = label))
     }
 
     suspend fun delete(entry: BlockedNumber) = dao.delete(entry)
 
     suspend fun deleteByNumber(rawNumber: String) {
-        val normalized = PhoneUtils.normalizeNumber(rawNumber)
-        // Supprime les deux formats si présents
-        dao.deleteByNumber(normalized)
-        val alt = if (normalized.startsWith("+33"))
-            "0" + normalized.substring(3)
-        else if (normalized.startsWith("0"))
-            "+33" + normalized.substring(1)
-        else null
-        alt?.let { dao.deleteByNumber(it) }
+        dao.getAllOnce().filter {
+            it.number == rawNumber || fr.bonobo.phonezen.utils.InternationalNumbers.matchesStored(rawNumber, it.number, PhoneUtils.regionProvider())
+        }.forEach { dao.delete(it) }
     }
 }

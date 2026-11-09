@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="country_title">"🌍 国と保護"</string>
+    <string name="country_default">"既定の国／連絡先"</string>
+    <string name="country_manual">"手動"</string>
+    <string name="country_unknown">"未確定"</string>
+    <string name="country_choose">"国を選択"</string>
+    <string name="country_no_lines">"回線を利用できません。電話の権限を確認するか、既定の国を選んでください。"</string>
+    <string name="country_explanation">"国際番号のない番号を解釈するための国です。言語とは別にSIMから検出するか手動で選びます。既定の国は連絡先にも使用します。"</string>
+    <string name="country_rules">"共通保護：リスト、プロファイル、時間帯。フランス向けフィルターはフランスの番号と判別された場合のみ適用し、外国の番号の接頭辞を既定でブロックしません。"</string>
+    <string name="country_number_needed">"設定で国を選ぶか、+と国番号を含む完全な番号を使用してください。"</string>
+</resources>
+

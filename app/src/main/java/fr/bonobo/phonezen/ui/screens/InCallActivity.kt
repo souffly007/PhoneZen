@@ -42,7 +42,59 @@ class InCallActivity : ComponentActivity() {
             }
     }
 
-    private var proximityWakeLock: PowerManager.WakeLock? = null
+    private var displayMode by mutableStateOf(CallPopupMode.FULLSCREEN)
+    private var callerNumber by mutableStateOf("")
+    private var callerName by mutableStateOf("")
+    private var displayStatus by mutableStateOf(CallStatus.IDLE)
+    private val overlayControls = object : CallOverlayControls {
+        override val callerName: String get() = this@InCallActivity.callerName
+        override val callerNumber: String get() = this@InCallActivity.callerNumber
+        override val callStatus: CallStatus get() = displayStatus
+        override fun answer() = CallManager.answer()
+        override fun reject() = CallManager.rejectRingingOrHangUp()
+    }
+
+    private fun refreshCallUi() {
+        val call = CallManager.getCalls().firstOrNull { it.state == Call.STATE_RINGING } ?: CallManager.getCall()
+        if (call == null) { returnToMainActivity(); return }
+        callerNumber = call.details.handle?.schemeSpecificPart.orEmpty()
+        callerName = ContactResolver.displayName(this, callerNumber)
+        displayStatus = CallManager.fromState(call.state)
+        if (displayStatus == CallStatus.RINGING) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        refreshSecondCallUi()
+    }
+
+    private fun applyDisplayMode() {
+        window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
+        if (displayMode == CallPopupMode.FULLSCREEN) window.clearFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL)
+        else window.addFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL)
+        window.setDimAmount(0f)
+        window.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+        window.setLayout(WindowManager.LayoutParams.MATCH_PARENT,
+            if (displayMode == CallPopupMode.FULLSCREEN) WindowManager.LayoutParams.MATCH_PARENT
+            else WindowManager.LayoutParams.WRAP_CONTENT)
+        window.setGravity(if (displayMode == CallPopupMode.MINI) android.view.Gravity.TOP else android.view.Gravity.BOTTOM)
+        // Keep popup content outside Android's status/navigation bars.  The
+        // values vary by device (gesture navigation, 3-button navigation,
+        // cut-outs), so read the current insets instead of hard-coding pixels.
+        window.decorView.post {
+            val insets = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                window.decorView.rootWindowInsets?.let {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                        it.getInsets(android.view.WindowInsets.Type.statusBars() or android.view.WindowInsets.Type.navigationBars())
+                    } else {
+                        @Suppress("DEPRECATION")
+                        android.graphics.Insets.of(it.systemWindowInsetLeft, it.systemWindowInsetTop, it.systemWindowInsetRight, it.systemWindowInsetBottom)
+                    }
+                }
+            } else null
+            val safeInset = if (displayMode == CallPopupMode.MINI) insets?.top ?: 0 else insets?.bottom ?: 0
+            val attrs = window.attributes
+            attrs.y = safeInset + (8 * resources.displayMetrics.density).toInt()
+            window.attributes = attrs
+        }
+    }
 
     private var secondCallName   by mutableStateOf<String?>(null)
     private var secondCallNumber by mutableStateOf<String?>(null)
@@ -50,7 +102,7 @@ class InCallActivity : ComponentActivity() {
     private var waitingCall      : Call? = null
 
     private val callStatusListener: (Call?, CallStatus) -> Unit = { _, _ ->
-        refreshSecondCallUi()
+        refreshCallUi()
     }
 
     private var hasReturnedToMain = false
@@ -59,25 +111,20 @@ class InCallActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         CrashHandler.lastAction = "InCallActivity.onCreate"
         setupLockScreenFlags()
-        initProximityWakeLock()
+        CallOverlayService.stop(this)
 
-        val popupMode = getPopupMode()
-        val number    = CallManager.getCall()?.details?.handle?.schemeSpecificPart ?: ""
-
-        if (number.isNotBlank()) {
-            CrashHandler.lastAnalyzedNumber = number
-        }
-
-        if (popupMode != CallPopupMode.FULLSCREEN && number.isNotBlank()) {
-            CrashHandler.lastAction = "InCallActivity.onCreate: délégation overlay $popupMode"
-            Log.d(TAG, "Mode $popupMode → délégation au CallOverlayService")
-            CallOverlayService.start(this, popupMode, number)
-            finish()
-            return
-        }
+        displayMode = if (intent.getBooleanExtra("force_fullscreen", false)) CallPopupMode.FULLSCREEN else getPopupMode()
+        applyDisplayMode()
+        refreshCallUi()
+        if (isFinishing) return
 
         setContent {
             PhoneZenTheme {
+                if (displayMode != CallPopupMode.FULLSCREEN) {
+                    val expand = { displayMode = CallPopupMode.FULLSCREEN; applyDisplayMode() }
+                    if (displayMode == CallPopupMode.MINI) MiniCallOverlay(overlayControls, expand)
+                    else CompactCallOverlay(overlayControls, expand)
+                } else {
                 val vm: InCallViewModel = viewModel()
                 InCallScreen(
                     vm                 = vm,
@@ -90,6 +137,7 @@ class InCallActivity : ComponentActivity() {
                     onStayOnFirstCall  = { stayOnFirstCall() },
                     onSwapCalls        = { swapCalls() }
                 )
+                }
             }
         }
     }
@@ -99,21 +147,18 @@ class InCallActivity : ComponentActivity() {
         CrashHandler.lastAction = "InCallActivity.onResume"
         CallManager.reconnectIfNeeded()
         CallManager.addListener(callStatusListener)
-        refreshSecondCallUi()
-        acquireProximityWakeLock()
+        refreshCallUi()
+        applyDisplayMode()
     }
 
     override fun onPause() {
         super.onPause()
         CrashHandler.lastAction = "InCallActivity.onPause"
-        CallManager.removeListener(callStatusListener)
-        releaseProximityWakeLock()
     }
 
     override fun onDestroy() {
         CrashHandler.lastAction = "InCallActivity.onDestroy"
         CallManager.removeListener(callStatusListener)
-        releaseProximityWakeLock()
         super.onDestroy()
     }
 
@@ -123,7 +168,9 @@ class InCallActivity : ComponentActivity() {
         super.onNewIntent(intent)
         CrashHandler.lastAction = "InCallActivity.onNewIntent"
         setIntent(intent)
-        refreshSecondCallUi()
+        if (intent.getBooleanExtra("force_fullscreen", false)) displayMode = CallPopupMode.FULLSCREEN
+        applyDisplayMode()
+        refreshCallUi()
     }
 
     // ── Mode popup ────────────────────────────────────────────────────────────
@@ -134,40 +181,6 @@ class InCallActivity : ComponentActivity() {
             ?: CallPopupMode.FULLSCREEN.name
         return runCatching { CallPopupMode.valueOf(modeName) }
             .getOrDefault(CallPopupMode.FULLSCREEN)
-    }
-
-    // ── Capteur de proximité ──────────────────────────────────────────────────
-
-    private fun initProximityWakeLock() {
-        try {
-            val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
-            if (pm.isWakeLockLevelSupported(PowerManager.PROXIMITY_SCREEN_OFF_WAKE_LOCK)) {
-                proximityWakeLock = pm.newWakeLock(
-                    PowerManager.PROXIMITY_SCREEN_OFF_WAKE_LOCK,
-                    "PhoneZen:proximity"
-                ).apply { setReferenceCounted(false) }
-                Log.d(TAG, "ProximityWakeLock initialisé")
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "initProximityWakeLock error: ${e.message}")
-        }
-    }
-
-    private fun acquireProximityWakeLock() {
-        try {
-            proximityWakeLock?.takeIf { !it.isHeld }?.acquire()
-        } catch (e: Exception) {
-            Log.e(TAG, "acquireProximityWakeLock error: ${e.message}")
-        }
-    }
-
-    private fun releaseProximityWakeLock() {
-        try {
-            proximityWakeLock?.takeIf { it.isHeld }
-                ?.release(PowerManager.RELEASE_FLAG_WAIT_FOR_NO_PROXIMITY)
-        } catch (e: Exception) {
-            Log.e(TAG, "releaseProximityWakeLock error: ${e.message}")
-        }
     }
 
     // ── Lock screen ───────────────────────────────────────────────────────────
@@ -183,10 +196,7 @@ class InCallActivity : ComponentActivity() {
                         WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
             )
         }
-        window.addFlags(
-            WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
-                    WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD
-        )
+
     }
 
     // ── Fin d'appel / retour à MainActivity ──────────────────────────────────
@@ -195,13 +205,15 @@ class InCallActivity : ComponentActivity() {
         if (hasReturnedToMain) return
         hasReturnedToMain = true
         CrashHandler.lastAction = "InCallActivity.returnToMainActivity"
-        Log.d(TAG, "Plus aucun appel → retour vers MainActivity")
+        if (CallManager.getCallCount() > 0) { hasReturnedToMain = false; return }
+        window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         try {
-            startActivity(Intent(this, MainActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_NEW_TASK
+            startActivity(Intent(Intent.ACTION_MAIN).apply {
+                addCategory(Intent.CATEGORY_HOME)
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
             })
         } catch (e: Exception) {
-            Log.e(TAG, "Erreur returnToMainActivity: ${e.message}")
+            Log.e(TAG, "Accueil Android indisponible", e)
         }
         finish()
     }

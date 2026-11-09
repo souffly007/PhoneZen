@@ -47,7 +47,7 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.PhoneZen"
-        android:usesCleartextTraffic="true">
+        android:usesCleartextTraffic="false">
 
         <activity
             android:name=".MainActivity"
@@ -85,11 +85,11 @@
             android:turnScreenOn="true"
             android:showForAllUsers="true"
             android:directBootAware="true"
-            android:screenOrientation="portrait"
             android:launchMode="singleInstance"
+            android:taskAffinity="${applicationId}.calls"
             android:excludeFromRecents="true"
             android:configChanges="orientation|screenLayout|screenSize|smallestScreenSize|keyboardHidden"
-            android:theme="@style/Theme.PhoneZen" />
+            android:theme="@style/Theme.PhoneZen.Call" />
 
         <activity
             android:name=".CallEndActivity"

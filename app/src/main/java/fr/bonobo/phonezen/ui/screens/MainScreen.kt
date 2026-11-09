@@ -22,19 +22,23 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import fr.bonobo.phonezen.R
+import androidx.lifecycle.viewmodel.compose.viewModel
 import fr.bonobo.phonezen.ui.theme.LocalColors
+import fr.bonobo.phonezen.viewmodel.BlockedCallsViewModel
 import fr.bonobo.phonezen.viewmodel.MainViewModel
 import fr.bonobo.phonezen.viewmodel.ThemeViewModel
 //import fr.bonobo.phonezen.voicemail.VoicemailScreen
 //import fr.bonobo.phonezen.voicemail.VoicemailSettingsScreen
 
-enum class Screen(val title: String, val icon: ImageVector) {
-    Onboarding("Bienvenue", Icons.Default.Shield),
-    Recents("Journal", Icons.Default.History),
-    Keypad("Clavier", Icons.Default.Dialpad),
+enum class Screen(val titleRes: Int, val icon: ImageVector) {
+    Onboarding(R.string.nav_onboarding, Icons.Default.Shield),
+    Recents(R.string.nav_recents, Icons.Default.History),
+    Keypad(R.string.nav_keypad, Icons.Default.Dialpad),
     //Voicemail("Répondeur", Icons.Default.Voicemail),
-    Contacts("Contacts", Icons.Default.Contacts),
-    Settings("Réglages", Icons.Default.Settings)
+    Contacts(R.string.nav_contacts, Icons.Default.Contacts),
+    Settings(R.string.nav_settings, Icons.Default.Settings)
 }
 
 private val navScreens = listOf(
@@ -83,6 +87,7 @@ fun MainScreen(
     var showEditContact by remember { mutableStateOf(false) }
     var currentContactIdToEdit by remember { mutableStateOf<Long?>(null) }
     var prefillNumber by remember { mutableStateOf("") }
+    var showBlockedCalls by remember { mutableStateOf(false) }
 
     var showVoicemail by remember { mutableStateOf(false) }
 
@@ -166,6 +171,16 @@ fun MainScreen(
         return
     }
 
+    if (showBlockedCalls) {
+        val blockedCallsVm: BlockedCallsViewModel = viewModel()
+        BlockedCallsHistoryScreen(
+            viewModel = blockedCallsVm,
+            onBack = { showBlockedCalls = false },
+            onCall = onCall
+        )
+        return
+    }
+
     if (currentScreen == Screen.Onboarding) {
         OnboardingScreen(
             isDialerGranted = isDialerGranted,
@@ -198,7 +213,7 @@ fun MainScreen(
                         },
                         label = {
                             Text(
-                                text = screen.title,
+                                text = stringResource(screen.titleRes),
                                 color = if (currentScreen == screen) {
                                     c.neonOrange
                                 } else {
@@ -209,7 +224,7 @@ fun MainScreen(
                         icon = {
                             Icon(
                                 imageVector = screen.icon,
-                                contentDescription = screen.title,
+                                contentDescription = stringResource(screen.titleRes),
                                 tint = if (currentScreen == screen) {
                                     c.neonOrange
                                 } else {
@@ -278,7 +293,8 @@ fun MainScreen(
                     onNavigateToWhitelist = { showWhitelist = true },
                     onNavigateToTheme = { showTheme = true },
                     onNavigateToTopReported = { showTopReported = true },
-                    onNavigateToProfiles = { showProfiles = true }
+                    onNavigateToProfiles = { showProfiles = true },
+                    onNavigateToBlockedCalls = { showBlockedCalls = true }
                 )
 
                 Screen.Onboarding -> Unit

@@ -8,6 +8,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
 import android.os.Build
+import android.util.Log
 import fr.bonobo.phonezen.blocking.HospitalWhitelistManager
 import fr.bonobo.phonezen.data.local.AppDatabase
 import fr.bonobo.phonezen.data.repository.HealthcareRepository
@@ -31,14 +32,66 @@ class PhoneZenApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        fr.bonobo.phonezen.utils.PhoneUtils.regionProvider = {
+            fr.bonobo.phonezen.utils.CountrySettings(this).defaultRegion()
+        }
 
         // ── Crash reporter — doit être installé en premier ────────────────
         CrashHandler.install(this)
+        
+        // Enregistrer l'instance pour les ViewModels qui en ont besoin
+        registerInstance()
 
+        // Pré-charger les règles pour les pays courants (améliore les performances)
+        preloadCommonCountryRules()
+
+        hospitalWhitelistManager
         createNotificationChannels()
 
         // Planifie la sync Supabase toutes les 24h (idempotent, safe à appeler à chaque démarrage)
         HealthcareWhitelistSyncWorker.schedule(this)
+    }
+    
+    /**
+     * Pré-charge les règles pour les pays les plus courants.
+     * Cela évite un chargement à la demande lors du premier appel.
+     */
+    private fun preloadCommonCountryRules() {
+        Thread {
+            try {
+                val commonCountries = listOf("FR", "DE", "BE", "ES", "IT", "CH", "GB", "NL", "PT", "US", "CA")
+                commonCountries.forEach { country ->
+                    fr.bonobo.phonezen.utils.CountryRulesManager.loadRules(country, this)
+                }
+                Log.d("PhoneZenApp", "Règles pré-chargées pour ${commonCountries.size} pays")
+            } catch (e: Exception) {
+                Log.e("PhoneZenApp", "Erreur pré-chargement règles par pays: ${e.message}")
+            }
+        }.start()
+    }
+    
+    /**
+     * Enregistre cette instance pour un accès global (utilisé par certains ViewModels).
+     * 
+     * ATTENTION : À utiliser avec prudence. Préférer l'injection de dépendances.
+     */
+    private fun registerInstance() {
+        instance = this
+    }
+    
+    companion object {
+        @Volatile
+        private var instance: PhoneZenApp? = null
+        
+        /**
+         * Obtient l'instance singleton de l'application.
+         * 
+         * @return L'instance de PhoneZenApp
+         * @throws IllegalStateException si l'application n'a pas encore été initialisée
+         */
+        fun getInstance(): PhoneZenApp {
+            return instance ?: error("PhoneZenApp not yet initialized")
+        }
     }
 
     private fun createNotificationChannels() {

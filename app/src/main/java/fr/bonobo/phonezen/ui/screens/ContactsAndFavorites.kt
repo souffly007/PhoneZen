@@ -1,5 +1,8 @@
 package fr.bonobo.phonezen.ui.screens
 
+import androidx.compose.ui.res.stringResource
+import fr.bonobo.phonezen.R
+
 import android.content.ContentUris
 import android.content.Intent
 import android.net.Uri
@@ -43,9 +46,6 @@ import fr.bonobo.phonezen.ui.theme.*
 import fr.bonobo.phonezen.viewmodel.MainViewModel
 import kotlinx.coroutines.launch
 
-// ── Alphabet complet ──────────────────────────────────────────────────────────
-private val ALPHABET = ('A'..'Z').map { it.toString() } + listOf("#")
-
 private sealed class ListItem {
     data class Header(val letter: String) : ListItem()
     data class ContactItem(val contact: Contact) : ListItem()
@@ -62,11 +62,12 @@ fun PhoneNumberPickerDialog(
     onSelect: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
+    val pickerContext = androidx.compose.ui.platform.LocalContext.current
     val c = LocalColors.current
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor   = c.surfaceVar,
-        title            = { Text("Appeler $contactName", color = c.textPrimary) },
+        title            = { Text(pickerContext.getString(fr.bonobo.phonezen.R.string.call_contact, contactName), color = c.textPrimary) },
         text             = {
             Column {
                 numbers.forEach { num ->
@@ -86,6 +87,7 @@ fun PhoneNumberPickerDialog(
                         Spacer(Modifier.width(12.dp))
                         Text(
                             text     = num.replace(" ", "\u00A0"),
+                            style    = androidx.compose.material3.LocalTextStyle.current.copy(textDirection = androidx.compose.ui.text.style.TextDirection.Ltr),
                             color    = c.textPrimary,
                             fontSize = 15.sp
                         )
@@ -99,7 +101,7 @@ fun PhoneNumberPickerDialog(
         confirmButton = {},
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Annuler", color = c.neonCyan)
+                Text(pickerContext.getString(fr.bonobo.phonezen.R.string.cancel), color = c.neonCyan)
             }
         }
     )
@@ -162,7 +164,7 @@ fun ContactsScreen(
                 shape          = CircleShape,
                 modifier       = Modifier.padding(end = 20.dp, bottom = 16.dp)
             ) {
-                Icon(imageVector = Icons.Default.PersonAdd, contentDescription = "Nouveau contact")
+                Icon(imageVector = Icons.Default.PersonAdd, contentDescription = stringResource(R.string.extra_new_contact))
             }
         }
     ) { paddingValues ->
@@ -173,7 +175,7 @@ fun ContactsScreen(
                 .padding(bottom = paddingValues.calculateBottomPadding())
         ) {
             Text(
-                text       = "Contacts",
+                text       = stringResource(R.string.extra_contacts),
                 fontSize   = 24.sp,
                 fontWeight = FontWeight.Bold,
                 color      = c.neonCyan,
@@ -183,7 +185,7 @@ fun ContactsScreen(
             OutlinedTextField(
                 value         = query,
                 onValueChange = vm::setSearchQuery,
-                placeholder   = { Text("Rechercher…", color = c.textSecond) },
+                placeholder   = { Text(stringResource(R.string.extra_search), color = c.textSecond) },
                 leadingIcon   = { Icon(Icons.Default.Search, null, tint = c.neonCyan) },
                 singleLine    = true,
                 colors        = OutlinedTextFieldDefaults.colors(
@@ -204,7 +206,7 @@ fun ContactsScreen(
                     CircularProgressIndicator(color = c.neonCyan)
                 }
             } else if (sorted.isEmpty()) {
-                EmptyState(icon = Icons.Default.PersonSearch, message = "Aucun contact")
+                EmptyState(icon = Icons.Default.PersonSearch, message = stringResource(R.string.extra_no_contacts))
             } else {
                 val showAlpha = query.isBlank()
                 ContactListWithAlpha(
@@ -276,12 +278,16 @@ private fun ContactListWithAlpha(
         }
     }
 
+    // Use actual initials, including Arabic and Asian scripts. Large indexes remain searchable.
+    val indexLetters = letterIndexMap.keys.toList()
+    val displayAlpha = showAlpha && indexLetters.size in 1..35
+
     Box(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
             state    = listState,
             modifier = Modifier
                 .fillMaxSize()
-                .padding(end = if (showAlpha) 36.dp else 0.dp)
+                .padding(end = if (displayAlpha) 36.dp else 0.dp)
         ) {
             flatItems.forEachIndexed { _, item ->
                 when (item) {
@@ -302,9 +308,9 @@ private fun ContactListWithAlpha(
             }
         }
 
-        if (showAlpha) {
+        if (displayAlpha) {
             AlphaBar(
-                letters      = ALPHABET,
+                letters      = indexLetters,
                 activeLetter = activeLetter,
                 modifier     = Modifier
                     .align(Alignment.CenterEnd)
@@ -490,7 +496,7 @@ fun FavoritesScreen(vm: MainViewModel, onCall: (String) -> Unit) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text       = "Favoris",
+                text       = stringResource(R.string.extra_favorites),
                 fontSize   = 24.sp,
                 fontWeight = FontWeight.Bold,
                 color      = c.neonOrange,
@@ -498,7 +504,7 @@ fun FavoritesScreen(vm: MainViewModel, onCall: (String) -> Unit) {
             )
         }
         if (favorites.isEmpty()) {
-            EmptyState(icon = Icons.Default.StarBorder, message = "Aucun favori")
+            EmptyState(icon = Icons.Default.StarBorder, message = stringResource(R.string.extra_no_favorites))
         } else {
             LazyColumn(Modifier.fillMaxSize()) {
                 items(
@@ -528,9 +534,9 @@ fun ContactRow(contact: Contact, onCall: (String) -> Unit, vm: MainViewModel) {
     val c             = LocalColors.current
     val context       = LocalContext.current
     val whitelist    by vm.whitelist.collectAsState()
-    val isWhitelisted = whitelist.contains(
-        PhoneUtils.normalizeNumber(contact.phoneNumbers.firstOrNull() ?: "")
-    )
+    val isWhitelisted = whitelist.any {
+        fr.bonobo.phonezen.utils.InternationalNumbers.matchesStored(contact.phoneNumbers.firstOrNull(), it, PhoneUtils.regionProvider())
+    }
     var showMenu         by remember { mutableStateOf(false) }
     var showWlDialog     by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
@@ -586,6 +592,7 @@ fun ContactRow(contact: Contact, onCall: (String) -> Unit, vm: MainViewModel) {
                         Spacer(Modifier.width(6.dp))
                         Text(
                             text     = num.replace(" ", "\u00A0"),
+                            style    = androidx.compose.material3.LocalTextStyle.current.copy(textDirection = androidx.compose.ui.text.style.TextDirection.Ltr),
                             fontSize = 11.sp,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
@@ -610,7 +617,7 @@ fun ContactRow(contact: Contact, onCall: (String) -> Unit, vm: MainViewModel) {
                 ) {
                     Icon(
                         imageVector = if (contact.isFavorite) Icons.Default.Star else Icons.Default.StarBorder,
-                        contentDescription = "Favori",
+                        contentDescription = stringResource(R.string.extra_favorite),
                         tint = if (contact.isFavorite) c.neonOrange else c.textSecond,
                         modifier = Modifier.size(18.dp)
                     )
@@ -626,7 +633,7 @@ fun ContactRow(contact: Contact, onCall: (String) -> Unit, vm: MainViewModel) {
                 ) {
                     Icon(
                         imageVector = if (isWhitelisted) Icons.Default.Shield else Icons.Outlined.Shield,
-                        contentDescription = "Liste blanche",
+                        contentDescription = stringResource(R.string.extra_allowlist),
                         tint = if (isWhitelisted) c.neonCyan else c.textSecond,
                         modifier = Modifier.size(18.dp)
                     )
@@ -639,7 +646,7 @@ fun ContactRow(contact: Contact, onCall: (String) -> Unit, vm: MainViewModel) {
                 ) {
                     Icon(
                         imageVector = Icons.Default.MoreVert,
-                        contentDescription = "Menu",
+                        contentDescription = stringResource(R.string.extra_menu),
                         tint = c.textSecond,
                         modifier = Modifier.size(18.dp)
                     )
@@ -660,7 +667,7 @@ fun ContactRow(contact: Contact, onCall: (String) -> Unit, vm: MainViewModel) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.Edit, null, modifier = Modifier.size(18.dp), tint = c.neonCyan)
                     Spacer(Modifier.width(8.dp))
-                    Text("Modifier", color = c.textPrimary)
+                    Text(stringResource(R.string.extra_edit), color = c.textPrimary)
                 }
             },
             onClick = {
@@ -700,7 +707,7 @@ fun ContactRow(contact: Contact, onCall: (String) -> Unit, vm: MainViewModel) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.Info, null, modifier = Modifier.size(18.dp), tint = c.textSecond)
                     Spacer(Modifier.width(8.dp))
-                    Text("Détails", color = c.textPrimary)
+                    Text(stringResource(R.string.extra_details), color = c.textPrimary)
                 }
             },
             onClick = {
@@ -732,12 +739,12 @@ fun ContactRow(contact: Contact, onCall: (String) -> Unit, vm: MainViewModel) {
             onClick = {
                 showMenu = false
                 val num        = contact.phoneNumbers.firstOrNull() ?: return@DropdownMenuItem
-                val digitsOnly = num.replace(Regex("[^0-9]"), "")
-                val finalNumber = when {
-                    digitsOnly.startsWith("0")  -> "33" + digitsOnly.drop(1)
-                    digitsOnly.startsWith("33") -> digitsOnly
-                    else                        -> "33$digitsOnly"
+                val international = fr.bonobo.phonezen.utils.InternationalNumbers.e164(num, PhoneUtils.regionProvider())
+                if (international == null) {
+                    Toast.makeText(context, context.getString(R.string.country_number_needed), Toast.LENGTH_LONG).show()
+                    return@DropdownMenuItem
                 }
+                val finalNumber = international.removePrefix("+")
                 val uri    = Uri.parse("https://wa.me/$finalNumber")
                 val intent = Intent(Intent.ACTION_VIEW, uri).apply {
                     setPackage("com.whatsapp")
@@ -762,7 +769,7 @@ fun ContactRow(contact: Contact, onCall: (String) -> Unit, vm: MainViewModel) {
                         tint     = MaterialTheme.colorScheme.error
                     )
                     Spacer(Modifier.width(8.dp))
-                    Text("Supprimer", color = MaterialTheme.colorScheme.error)
+                    Text(stringResource(R.string.extra_delete), color = MaterialTheme.colorScheme.error)
                 }
             },
             onClick = {
@@ -777,17 +784,17 @@ fun ContactRow(contact: Contact, onCall: (String) -> Unit, vm: MainViewModel) {
         AlertDialog(
             onDismissRequest = { showWlDialog = false },
             containerColor   = c.surfaceVar,
-            title            = { Text("Retirer ?", color = c.textPrimary) },
-            text             = { Text("Enlever ${contact.name} de la liste blanche ?", color = c.textSecond) },
+            title            = { Text(stringResource(R.string.extra_remove_title), color = c.textPrimary) },
+            text             = { Text(stringResource(R.string.extra_remove_contact, contact.name), color = c.textSecond) },
             confirmButton    = {
                 TextButton(onClick = {
                     contact.phoneNumbers.firstOrNull()?.let { vm.removeFromWhitelist(it) }
                     showWlDialog = false
-                }) { Text("Retirer", color = MaterialTheme.colorScheme.error) }
+                }) { Text(stringResource(R.string.extra_remove), color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
                 TextButton(onClick = { showWlDialog = false }) {
-                    Text("Annuler", color = c.neonCyan)
+                    Text(stringResource(R.string.extra_cancel), color = c.neonCyan)
                 }
             }
         )
@@ -798,10 +805,10 @@ fun ContactRow(contact: Contact, onCall: (String) -> Unit, vm: MainViewModel) {
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },
             containerColor   = c.surfaceVar,
-            title            = { Text("Supprimer ?", color = c.textPrimary) },
+            title            = { Text(stringResource(R.string.extra_delete_title), color = c.textPrimary) },
             text             = {
                 Text(
-                    text  = "Supprimer définitivement ${contact.name} de vos contacts ?",
+                    text  = stringResource(R.string.extra_delete_contact, contact.name),
                     color = c.textSecond
                 )
             },
@@ -813,14 +820,14 @@ fun ContactRow(contact: Contact, onCall: (String) -> Unit, vm: MainViewModel) {
                     )
                     context.contentResolver.delete(uri, null, null)
                     showDeleteDialog = false
-                    Toast.makeText(context, "${contact.name} supprimé", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, context.getString(R.string.extra_contact_deleted, contact.name), Toast.LENGTH_SHORT).show()
                 }) {
-                    Text("Supprimer", color = MaterialTheme.colorScheme.error)
+                    Text(stringResource(R.string.extra_delete), color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteDialog = false }) {
-                    Text("Annuler", color = c.neonCyan)
+                    Text(stringResource(R.string.extra_cancel), color = c.neonCyan)
                 }
             }
         )

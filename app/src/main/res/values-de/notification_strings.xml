@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="notif_driving_title">"Fahrmodus"</string>
+    <string name="notif_driving_desc">"Automatische Erkennung des Fahrmodus"</string>
+    <string name="notif_driving_detecting">"Erkennung läuft…"</string>
+    <string name="notif_call_ongoing">"Anruf läuft"</string>
+    <string name="notif_phone_call">"Telefonanruf"</string>
+    <string name="notif_open">"Öffnen"</string>
+    <string name="notif_active_channel">"Aktive Anrufe"</string>
+    <string name="notif_active_desc">"Zeigt an, dass PhoneZen den aktuellen Anruf verwaltet"</string>
+    <string name="notif_blocked_channel">"Sicherheit (Spam)"</string>
+    <string name="notif_blocked_desc">"Benachrichtigungen über von PhoneZen blockierte Nummern"</string>
+    <string name="notif_voicemail_channel">"Mailbox"</string>
+    <string name="notif_voicemail_desc">"Mailbox-Benachrichtigungen"</string>
+</resources>
+

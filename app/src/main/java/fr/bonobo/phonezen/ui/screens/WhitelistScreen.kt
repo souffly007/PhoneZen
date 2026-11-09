@@ -1,5 +1,8 @@
 package fr.bonobo.phonezen.ui.screens
 
+import fr.bonobo.phonezen.R
+import androidx.compose.ui.platform.LocalContext
+
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -29,6 +32,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun WhitelistScreen(vm: MainViewModel, onBack: () -> Unit = {}) {
     val c           = LocalColors.current
+    val strings = LocalContext.current.resources
     val whitelist   by vm.whitelist.collectAsState()
     val contacts    by vm.contacts.collectAsState()
     var inputNumber by remember { mutableStateOf("") }
@@ -49,7 +53,7 @@ fun WhitelistScreen(vm: MainViewModel, onBack: () -> Unit = {}) {
             // Un numéro a été ajouté depuis l'extérieur (notification "Ne plus bloquer")
             coroutineScope.launch {
                 snackbarHostState.showSnackbar(
-                    message  = "✅ Numéro ajouté à la liste blanche",
+                    message  = strings.getString(R.string.allow_added),
                     duration = SnackbarDuration.Short
                 )
             }
@@ -60,9 +64,11 @@ fun WhitelistScreen(vm: MainViewModel, onBack: () -> Unit = {}) {
     fun tryAdd() {
         val cleaned = inputNumber.replace(Regex("[\\s.\\-()]"), "")
         when {
-            cleaned.isEmpty()           -> errorMsg = "Entrez un numéro"
-            cleaned.length < 6          -> errorMsg = "Numéro trop court"
-            whitelist.contains(cleaned) -> errorMsg = "Déjà dans la liste blanche"
+            cleaned.isEmpty()           -> errorMsg = strings.getString(R.string.allow_enter)
+            cleaned.length < 6          -> errorMsg = strings.getString(R.string.allow_short)
+            vm.isWhitelisted(cleaned) -> errorMsg = strings.getString(R.string.allow_duplicate)
+            fr.bonobo.phonezen.utils.InternationalNumbers.e164(cleaned, fr.bonobo.phonezen.utils.PhoneUtils.regionProvider()) == null ->
+                errorMsg = strings.getString(R.string.country_number_needed)
             else -> {
                 vm.addToWhitelist(cleaned)
                 inputNumber = ""
@@ -92,7 +98,7 @@ fun WhitelistScreen(vm: MainViewModel, onBack: () -> Unit = {}) {
                     Icon(Icons.Default.ArrowBack, null, tint = c.neonCyan)
                 }
                 Text(
-                    text       = "Liste blanche",
+                    text       = strings.getString(R.string.allow_title),
                     fontSize   = 22.sp,
                     fontWeight = FontWeight.Bold,
                     color      = c.neonCyan,
@@ -108,7 +114,7 @@ fun WhitelistScreen(vm: MainViewModel, onBack: () -> Unit = {}) {
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
                     Text(
-                        "Ajouter un numéro manuellement",
+                        strings.getString(R.string.allow_manual),
                         fontSize   = 13.sp,
                         fontWeight = FontWeight.Bold,
                         color      = c.neonCyan,
@@ -118,7 +124,7 @@ fun WhitelistScreen(vm: MainViewModel, onBack: () -> Unit = {}) {
                         OutlinedTextField(
                             value           = inputNumber,
                             onValueChange   = { inputNumber = it; errorMsg = null },
-                            placeholder     = { Text("Ex: 0612345678", color = c.textSecond) },
+                            placeholder     = { Text(strings.getString(R.string.allow_example), color = c.textSecond) },
                             singleLine      = true,
                             modifier        = Modifier.weight(1f),
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone, imeAction = ImeAction.Done),
@@ -149,7 +155,7 @@ fun WhitelistScreen(vm: MainViewModel, onBack: () -> Unit = {}) {
                         Icon(Icons.Default.Info, null, tint = c.textSecond.copy(alpha = 0.6f), modifier = Modifier.size(14.dp))
                         Spacer(Modifier.width(4.dp))
                         Text(
-                            "Vous pouvez aussi utiliser l'icône 🛡 depuis l'onglet Contacts",
+                            strings.getString(R.string.allow_contacts_tip),
                             fontSize = 11.sp,
                             color    = c.textSecond.copy(alpha = 0.6f)
                         )
@@ -163,9 +169,9 @@ fun WhitelistScreen(vm: MainViewModel, onBack: () -> Unit = {}) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(Icons.Default.PlaylistAddCheck, null, tint = c.neonCyan.copy(alpha = 0.3f), modifier = Modifier.size(64.dp))
                         Spacer(Modifier.height(12.dp))
-                        Text("Liste blanche vide", fontSize = 16.sp, color = c.textSecond, fontWeight = FontWeight.Medium)
+                        Text(strings.getString(R.string.allow_empty), fontSize = 16.sp, color = c.textSecond, fontWeight = FontWeight.Medium)
                         Text(
-                            "Les numéros ajoutés ici ne seront\njamais bloqués par PhoneZen",
+                            strings.getString(R.string.allow_empty_summary),
                             fontSize = 13.sp,
                             color    = c.textSecond.copy(alpha = 0.7f),
                             modifier = Modifier.padding(top = 4.dp)
@@ -174,7 +180,7 @@ fun WhitelistScreen(vm: MainViewModel, onBack: () -> Unit = {}) {
                 }
             } else {
                 Text(
-                    "${whitelist.size} numéro(s) protégé(s)",
+                    strings.getQuantityString(R.plurals.protected_numbers, whitelist.size, whitelist.size),
                     fontSize = 12.sp,
                     color    = c.textSecond,
                     modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 4.dp)
@@ -208,6 +214,7 @@ fun WhitelistScreen(vm: MainViewModel, onBack: () -> Unit = {}) {
 @Composable
 private fun WhitelistEntry(number: String, contactName: String?, onRemove: () -> Unit) {
     val c             = LocalColors.current
+    val strings = LocalContext.current.resources
     var confirmDelete by remember { mutableStateOf(false) }
 
     Card(shape = RoundedCornerShape(10.dp), colors = CardDefaults.cardColors(containerColor = c.surfaceVar)) {
@@ -220,9 +227,9 @@ private fun WhitelistEntry(number: String, contactName: String?, onRemove: () ->
             Column(Modifier.weight(1f)) {
                 if (!contactName.isNullOrBlank()) {
                     Text(text = contactName, fontSize = 15.sp, color = c.textPrimary, fontWeight = FontWeight.Medium)
-                    Text(text = number,      fontSize = 12.sp, color = c.textSecond)
+                    Text(text = number, style = androidx.compose.material3.LocalTextStyle.current.copy(textDirection = androidx.compose.ui.text.style.TextDirection.Ltr),      fontSize = 12.sp, color = c.textSecond)
                 } else {
-                    Text(text = number, fontSize = 16.sp, color = c.textPrimary, fontWeight = FontWeight.Medium)
+                    Text(text = number, style = androidx.compose.material3.LocalTextStyle.current.copy(textDirection = androidx.compose.ui.text.style.TextDirection.Ltr), fontSize = 16.sp, color = c.textPrimary, fontWeight = FontWeight.Medium)
                 }
             }
             IconButton(onClick = { confirmDelete = true }) {
@@ -235,18 +242,18 @@ private fun WhitelistEntry(number: String, contactName: String?, onRemove: () ->
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
             containerColor   = c.surfaceVar,
-            title = { Text("Retirer de la liste blanche ?", color = c.textPrimary, fontWeight = FontWeight.Bold) },
+            title = { Text(strings.getString(R.string.allow_remove_title), color = c.textPrimary, fontWeight = FontWeight.Bold) },
             text  = {
                 val label = if (!contactName.isNullOrBlank()) "$contactName ($number)" else number
-                Text("$label pourra à nouveau être bloqué.", color = c.textSecond)
+                Text(strings.getString(R.string.allow_remove_message, label), color = c.textSecond)
             },
             confirmButton = {
                 TextButton(onClick = { onRemove(); confirmDelete = false }) {
-                    Text("Retirer", color = MaterialTheme.colorScheme.error)
+                    Text(strings.getString(R.string.allow_remove), color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { confirmDelete = false }) { Text("Annuler", color = c.neonCyan) }
+                TextButton(onClick = { confirmDelete = false }) { Text(strings.getString(R.string.submenu_cancel), color = c.neonCyan) }
             }
         )
     }

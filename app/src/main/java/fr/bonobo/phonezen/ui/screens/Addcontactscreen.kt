@@ -3,6 +3,9 @@
 // This file is part of PhoneZen.
 package fr.bonobo.phonezen.ui.screens
 
+import androidx.compose.ui.res.stringResource
+import fr.bonobo.phonezen.R
+
 import android.accounts.Account
 import android.content.ContentUris
 import android.content.Intent
@@ -108,10 +111,10 @@ fun AddContactScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = onNavigateBack) {
-                Icon(Icons.Default.ArrowBack, contentDescription = "Retour", tint = c.neonCyan)
+                Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.extra_back), tint = c.neonCyan)
             }
             Text(
-                text       = "Nouveau contact",
+                text       = stringResource(R.string.extra_new_contact),
                 color      = c.textPrimary,
                 fontSize   = 20.sp,
                 fontWeight = FontWeight.Bold,
@@ -124,7 +127,7 @@ fun AddContactScreen(
                 enabled  = uiState !is AddContactUiState.Loading
             ) {
                 Text(
-                    text       = "Enregistrer",
+                    text       = stringResource(R.string.extra_save),
                     color      = c.neonCyan,
                     fontWeight = FontWeight.Bold,
                     fontSize   = 15.sp
@@ -160,12 +163,12 @@ fun AddContactScreen(
             }
 
             // ── Identité ────────────────────────────────────────────────────
-            SectionLabel("Identité", c)
-            ContactField(value = firstName, onValueChange = { firstName = it }, label = "Prénom", c = c)
-            ContactField(value = lastName,  onValueChange = { lastName  = it }, label = "Nom",    c = c)
+            SectionLabel(stringResource(R.string.extra_identity), c)
+            ContactField(value = firstName, onValueChange = { firstName = it }, label = stringResource(R.string.extra_first_name), c = c)
+            ContactField(value = lastName,  onValueChange = { lastName  = it }, label = stringResource(R.string.extra_last_name),    c = c)
 
             // ── Téléphones ──────────────────────────────────────────────────
-            SectionLabel("Téléphones", c)
+            SectionLabel(stringResource(R.string.extra_phones), c)
             phones.forEachIndexed { i, phone ->
                 Row(
                     verticalAlignment     = Alignment.CenterVertically,
@@ -174,22 +177,22 @@ fun AddContactScreen(
                     ContactField(
                         value         = phone,
                         onValueChange = { v -> phones = phones.toMutableList().also { it[i] = v } },
-                        label         = "Numéro ${i + 1}",
+                        label         = stringResource(R.string.extra_number_index, i + 1),
                         keyboardType  = KeyboardType.Phone,
                         c             = c,
                         modifier      = Modifier.weight(1f)
                     )
                     if (phones.size > 1) {
                         IconButton(onClick = { phones = phones.toMutableList().also { it.removeAt(i) } }) {
-                            Icon(Icons.Default.Close, contentDescription = "Supprimer", tint = c.neonRed)
+                            Icon(Icons.Default.Close, contentDescription = stringResource(R.string.extra_delete), tint = c.neonRed)
                         }
                     }
                 }
             }
-            AddFieldBtn("Ajouter un numéro", c) { phones = phones + "" }
+            AddFieldBtn(stringResource(R.string.extra_add_number), c) { phones = phones + "" }
 
             // ── Emails ──────────────────────────────────────────────────────
-            SectionLabel("Emails", c)
+            SectionLabel(stringResource(R.string.extra_emails), c)
             emails.forEachIndexed { i, email ->
                 Row(
                     verticalAlignment     = Alignment.CenterVertically,
@@ -198,23 +201,23 @@ fun AddContactScreen(
                     ContactField(
                         value         = email,
                         onValueChange = { v -> emails = emails.toMutableList().also { it[i] = v } },
-                        label         = "Email ${i + 1}",
+                        label         = stringResource(R.string.extra_email_index, i + 1),
                         keyboardType  = KeyboardType.Email,
                         c             = c,
                         modifier      = Modifier.weight(1f)
                     )
                     if (emails.size > 1) {
                         IconButton(onClick = { emails = emails.toMutableList().also { it.removeAt(i) } }) {
-                            Icon(Icons.Default.Close, contentDescription = "Supprimer", tint = c.neonRed)
+                            Icon(Icons.Default.Close, contentDescription = stringResource(R.string.extra_delete), tint = c.neonRed)
                         }
                     }
                 }
             }
-            AddFieldBtn("Ajouter un email", c) { emails = emails + "" }
+            AddFieldBtn(stringResource(R.string.extra_add_email), c) { emails = emails + "" }
 
             // ── Compte Android ──────────────────────────────────────────────
             if (availAccounts.isNotEmpty()) {
-                SectionLabel("Enregistrer dans", c)
+                SectionLabel(stringResource(R.string.extra_save_to), c)
 
                 // Info compte Google sélectionné
                 if (selectedAccount?.type == "com.google") {
@@ -237,7 +240,7 @@ fun AddContactScreen(
                             )
                             Spacer(Modifier.width(6.dp))
                             Text(
-                                "Ce contact sera sauvegardé sur Google et synchronisé sur tous vos appareils.",
+                                stringResource(R.string.extra_google_sync),
                                 fontSize = 11.sp,
                                 color    = c.neonCyan
                             )
@@ -259,7 +262,7 @@ fun AddContactScreen(
                         Column {
                             Text(
                                 text     = if (selectedAccount?.type == "com.google") "Google"
-                                else selectedAccount?.type?.substringAfterLast('.') ?: "Téléphone (local)",
+                                else selectedAccount?.type?.substringAfterLast('.') ?: stringResource(R.string.extra_local_phone),
                                 color    = c.textPrimary,
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Medium
@@ -279,7 +282,7 @@ fun AddContactScreen(
                         onDismissRequest = { accountMenuExpanded = false }
                     ) {
                         DropdownMenuItem(
-                            text    = { Text("Téléphone (local)") },
+                            text    = { Text(stringResource(R.string.extra_local_phone)) },
                             onClick = { selectedAccount = null; accountMenuExpanded = false }
                         )
                         availAccounts.forEach { account ->

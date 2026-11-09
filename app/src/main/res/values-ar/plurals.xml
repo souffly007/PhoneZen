@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="selected_calls">
+        <item quantity="zero">"لم تُحدد أي مكالمات"</item>
+        <item quantity="one">"حُددت مكالمة واحدة"</item>
+        <item quantity="two">"حُددت مكالمتان"</item>
+        <item quantity="few">"حُددت %1$d مكالمات"</item>
+        <item quantity="many">"حُددت %1$d مكالمة"</item>
+        <item quantity="other">"حُددت %1$d مكالمة"</item>
+    </plurals>
+    <plurals name="load_remaining">
+        <item quantity="zero">"لا عناصر متبقية للتحميل"</item>
+        <item quantity="one">"تحميل العنصر المتبقي"</item>
+        <item quantity="two">"تحميل العنصرين المتبقيين"</item>
+        <item quantity="few">"تحميل %1$d عناصر متبقية"</item>
+        <item quantity="many">"تحميل %1$d عنصرًا متبقيًا"</item>
+        <item quantity="other">"تحميل %1$d عنصر متبقٍ"</item>
+    </plurals>
+    <plurals name="more_calls">
+        <item quantity="zero">"… ولا مزيد"</item>
+        <item quantity="one">"… وعنصر آخر"</item>
+        <item quantity="two">"… وعنصران آخران"</item>
+        <item quantity="few">"… و%1$d عناصر أخرى"</item>
+        <item quantity="many">"… و%1$d عنصرًا آخر"</item>
+        <item quantity="other">"… و%1$d عنصر آخر"</item>
+    </plurals>
+    <plurals name="crash_reports">
+        <item quantity="zero">"لا تقارير متاحة"</item>
+        <item quantity="one">"تقرير واحد متاح"</item>
+        <item quantity="two">"تقريران متاحان"</item>
+        <item quantity="few">"%1$d تقارير متاحة"</item>
+        <item quantity="many">"%1$d تقريرًا متاحًا"</item>
+        <item quantity="other">"%1$d تقرير متاح"</item>
+    </plurals>
+    <plurals name="protected_numbers">
+        <item quantity="zero">"لا أرقام محمية"</item>
+        <item quantity="one">"رقم واحد محمي"</item>
+        <item quantity="two">"رقمان محميان"</item>
+        <item quantity="few">"%1$d أرقام محمية"</item>
+        <item quantity="many">"%1$d رقمًا محميًا"</item>
+        <item quantity="other">"%1$d رقم محمي"</item>
+    </plurals>
+    <plurals name="reported_numbers">
+        <item quantity="zero">"لا أرقام أبلغ عنها المجتمع"</item>
+        <item quantity="one">"رقم واحد أبلغ عنه المجتمع"</item>
+        <item quantity="two">"رقمان أبلغ عنهما المجتمع"</item>
+        <item quantity="few">"%1$d أرقام أبلغ عنها المجتمع"</item>
+        <item quantity="many">"%1$d رقمًا أبلغ عنها المجتمع"</item>
+        <item quantity="other">"%1$d رقم أبلغ عنها المجتمع"</item>
+    </plurals>
+    <plurals name="remaining_days">
+        <item quantity="zero">"لا أيام متبقية"</item>
+        <item quantity="one">"يوم واحد متبقٍ"</item>
+        <item quantity="two">"يومان متبقيان"</item>
+        <item quantity="few">"%1$d أيام متبقية"</item>
+        <item quantity="many">"%1$d يومًا متبقيًا"</item>
+        <item quantity="other">"%1$d يوم متبقٍ"</item>
+    </plurals>
+    <plurals name="duration_days">
+        <item quantity="zero">"صفر يوم"</item>
+        <item quantity="one">"يوم واحد"</item>
+        <item quantity="two">"يومان"</item>
+        <item quantity="few">"%1$d أيام"</item>
+        <item quantity="many">"%1$d يومًا"</item>
+        <item quantity="other">"%1$d يوم"</item>
+    </plurals>
+    <plurals name="report_count">
+        <item quantity="zero">"لا بلاغات"</item>
+        <item quantity="one">"بلاغ واحد"</item>
+        <item quantity="two">"بلاغان"</item>
+        <item quantity="few">"%1$d بلاغات"</item>
+        <item quantity="many">"%1$d بلاغًا"</item>
+        <item quantity="other">"%1$d بلاغ"</item>
+    </plurals>
+</resources>
+

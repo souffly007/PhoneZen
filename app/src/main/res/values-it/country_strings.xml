@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="country_title">"🌍 Paese e protezione"</string>
+    <string name="country_default">"Paese di riserva / contatti"</string>
+    <string name="country_manual">"Manuale"</string>
+    <string name="country_unknown">"Non determinato"</string>
+    <string name="country_choose">"Scegli un paese"</string>
+    <string name="country_no_lines">"Nessuna linea accessibile. Verifica il permesso Telefono o scegli un paese di riserva."</string>
+    <string name="country_explanation">"Il paese interpreta i numeri senza prefisso internazionale. Rilevamento SIM o scelta manuale, indipendente dalla lingua. Il paese di riserva vale anche per i contatti."</string>
+    <string name="country_rules">"Protezione generica: liste, profili e orari. I filtri francesi valgono solo per numeri identificati come francesi; nessun prefisso estero è bloccato per impostazione predefinita."</string>
+    <string name="country_number_needed">"Scegli il paese nelle Impostazioni o usa il numero completo con + e prefisso internazionale."</string>
+</resources>
+

@@ -1,4 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">PhoneZen</string>
+    <string name="nav_onboarding">Bienvenue</string>
+    <string name="nav_recents">Journal</string>
+    <string name="nav_keypad">Clavier</string>
+    <string name="nav_contacts">Contacts</string>
+    <string name="nav_settings">Réglages</string>
 </resources>

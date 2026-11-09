@@ -58,9 +58,13 @@ class InCallViewModel(app: Application) : AndroidViewModel(app) {
             return@listener
         }
 
+        val numberChanged = number != _state.value.number
         val isOutgoing = status == CallStatus.DIALING
-        val spam = if (!isOutgoing && number.isNotEmpty() && number != _state.value.number)
-            detector.analyze(number) else null
+        val spam = if (!isOutgoing && number.isNotEmpty() && numberChanged) {
+            val region = fr.bonobo.phonezen.utils.CountrySettings(app).forAccount(call?.details?.accountHandle)
+            val flags = fr.bonobo.phonezen.utils.PhoneUtils.resolveContactInfo(getApplication(), number, region)
+            detector.analyze(number, flags.first, flags.second, region)
+        } else null
 
         _state.update {
             it.copy(
@@ -78,7 +82,7 @@ class InCallViewModel(app: Application) : AndroidViewModel(app) {
             )
         }
 
-        if (number.isNotEmpty() && number != _state.value.number) {
+        if (number.isNotEmpty() && numberChanged) {
             _state.update {
                 it.copy(
                     contactName = null,
@@ -133,7 +137,8 @@ class InCallViewModel(app: Application) : AndroidViewModel(app) {
         CallManager.getCall()?.let { call ->
             val status     = CallManager.fromState(call.state)
             val number     = call.details?.handle?.schemeSpecificPart ?: ""
-            val isOutgoing = status == CallStatus.DIALING
+            val numberChanged = number != _state.value.number
+        val isOutgoing = status == CallStatus.DIALING
             _state.update {
                 it.copy(
                     number   = number,
@@ -164,11 +169,13 @@ class InCallViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun resolveArcep(number: String, isOutgoing: Boolean) {
         if (number.isBlank()) return
+        val region = regionForNumber(number)
+        val french = fr.bonobo.phonezen.utils.InternationalNumbers.frenchLocal(number, region) ?: return
         CrashHandler.lastAnalyzedNumber = number
         CrashHandler.lastAction         = "resolveArcep: $number"
         arcepJob?.cancel()
         arcepJob = viewModelScope.launch(Dispatchers.IO) {
-            val info = arcep.lookup(number) ?: return@launch
+            val info = arcep.lookup(french) ?: return@launch
             if (info.isUnknown) return@launch
 
             val arcepInfo = ArcepInfo(
@@ -232,7 +239,10 @@ class InCallViewModel(app: Application) : AndroidViewModel(app) {
 
             // 1. SpamDetector
             CrashHandler.lastAction = "resolveCallTrust: SpamDetector"
-            val spamResult = detector.analyze(number)
+            val region = regionForNumber(number)
+            val flags = PhoneUtils.resolveContactInfo(app, number, region)
+            val spamResult = detector.analyze(number, flags.first, flags.second, region)
+            val french = fr.bonobo.phonezen.utils.InternationalNumbers.frenchLocal(number, region)
             if (spamResult.isSpam) {
                 _state.update { it.copy(trustLevel = CallTrustLevel.Spam) }
                 return@launch
@@ -249,7 +259,7 @@ class InCallViewModel(app: Application) : AndroidViewModel(app) {
 
             // 3. Whitelist service public DILA
             CrashHandler.lastAction = "resolveCallTrust: DILA"
-            val dilaInfo = dila.lookup(number)
+            val dilaInfo = french?.let { dila.lookup(it) }
             if (dilaInfo != null) {
                 Log.d(TAG, "DILA: ${dilaInfo.nom} (${dilaInfo.categorie}) → Trusted")
                 _state.update { it.copy(trustLevel = CallTrustLevel.Trusted) }
@@ -258,7 +268,7 @@ class InCallViewModel(app: Application) : AndroidViewModel(app) {
 
             // 4. Whitelist Ameli
             CrashHandler.lastAction = "resolveCallTrust: Ameli"
-            val ameliInfo = ameli.lookup(number)
+            val ameliInfo = french?.let { ameli.lookup(it) }
             if (ameliInfo != null) {
                 Log.d(TAG, "Ameli: ${ameliInfo.specialite} → Trusted")
                 _state.update { it.copy(trustLevel = CallTrustLevel.Trusted) }
@@ -267,7 +277,7 @@ class InCallViewModel(app: Application) : AndroidViewModel(app) {
 
             // 5. Police Nationale
             CrashHandler.lastAction = "resolveCallTrust: Police Nationale"
-            val policeInfo = policeNat.lookup(number)
+            val policeInfo = french?.let { policeNat.lookup(it) }
             if (policeInfo != null) {
                 Log.d(TAG, "Police: ${policeInfo.nom} → Trusted")
                 _state.update { it.copy(trustLevel = CallTrustLevel.Trusted) }
@@ -284,9 +294,8 @@ class InCallViewModel(app: Application) : AndroidViewModel(app) {
 
             // 7. Mobile 06/07 non enregistré → Suspicious
             CrashHandler.lastAction = "resolveCallTrust: détection mobile inconnu"
-            val normalized = PhoneUtils.normalizeNumber(number)
-            val isMobile   = normalized.startsWith("06") || normalized.startsWith("07")
-                    || normalized.startsWith("+336") || normalized.startsWith("+337")
+            val normalized = PhoneUtils.normalizeNumber(number, region)
+            val isMobile = normalized.startsWith("+336") || normalized.startsWith("+337")
             if (isMobile) {
                 _state.update { it.copy(trustLevel = CallTrustLevel.Suspicious) }
                 return@launch
@@ -296,6 +305,11 @@ class InCallViewModel(app: Application) : AndroidViewModel(app) {
             CrashHandler.lastAction = "resolveCallTrust: terminé → Unknown"
             _state.update { it.copy(trustLevel = CallTrustLevel.Unknown) }
         }
+    }
+
+    private fun regionForNumber(number: String): String? {
+        val call = CallManager.getCalls().firstOrNull { it.details?.handle?.schemeSpecificPart == number }
+        return fr.bonobo.phonezen.utils.CountrySettings(getApplication()).forAccount(call?.details?.accountHandle)
     }
 
     // ─── Actions ──────────────────────────────────────────────────────────────
@@ -313,7 +327,6 @@ class InCallViewModel(app: Application) : AndroidViewModel(app) {
     fun hangUp() {
         CrashHandler.lastAction = "InCallViewModel.hangUp"
         CallManager.hangUp()
-        resetAudio()
     }
 
     fun toggleMute()                     = CallManager.toggleMute()
@@ -349,22 +362,9 @@ class InCallViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun resetAudio() {
-        try {
-            audioManager.mode             = AudioManager.MODE_NORMAL
-            audioManager.isSpeakerphoneOn = false
-            if (audioManager.isBluetoothScoOn) {
-                audioManager.isBluetoothScoOn = false
-                audioManager.stopBluetoothSco()
-            }
-            _state.update {
-                it.copy(
-                    isMuted    = false,
-                    audioRoute = AudioRoute.EARPIECE,
-                )
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "resetAudio error: ${e.message}")
-        }
+        if (CallManager.getCallCount() != 0) return
+        // Telecom owns the audio route. Do not tear down Bluetooth or change audio mode here.
+        _state.update { it.copy(isMuted = false, audioRoute = AudioRoute.EARPIECE) }
     }
 
     // ─── Lifecycle ────────────────────────────────────────────────────────────

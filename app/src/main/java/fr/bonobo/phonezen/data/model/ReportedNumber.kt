@@ -15,7 +15,9 @@ data class ReportedNumber(
     @SerialName("tags")          val tags         : List<String> = emptyList()
 ) {
     /** Seuil minimum de signalements pour considérer un numéro comme suspect */
-    fun isSuspect(): Boolean = reports >= SUSPECT_THRESHOLD
+    fun isSuspect(): Boolean = reports >= SUSPECT_THRESHOLD && runCatching {
+        java.time.Instant.parse(expiresAt).isAfter(java.time.Instant.now())
+    }.getOrDefault(false)
 
     companion object {
         const val TABLE              = "reported_numbers"
